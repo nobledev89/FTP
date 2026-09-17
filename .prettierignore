@@ -1,0 +1,11 @@
+.next
+out
+build
+coverage
+node_modules
+pnpm-lock.yaml
+next-env.d.ts
+supabase/.temp
+src/lib/supabase/database.types.ts
+docs/IMPLEMENTATION-PLAN.md
+docs/IMPLEMENTATION-STATUS.md

@@ -1,0 +1,87 @@
+import { z } from "zod";
+
+/**
+ * Local worker environment contract (implementation plan, section 15).
+ *
+ * Optional AI API keys are validated only when a stage actually selects an
+ * `api` mode. The worker must boot without them in mock, manual, and
+ * subscription CLI modes.
+ */
+
+const positiveInt = (fallback: number) => z.coerce.number().int().positive().default(fallback);
+
+const nonEmpty = z.string().trim().min(1);
+
+export const workerEnvSchema = z.object({
+  SUPABASE_URL: z.url(),
+  SUPABASE_SERVICE_ROLE_KEY: nonEmpty,
+  PUBLIC_SITE_URL: z.url(),
+  REVALIDATION_SECRET: z.string().min(32, "REVALIDATION_SECRET must be at least 32 characters"),
+  WORKER_ID: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9-]{1,62}$/, "WORKER_ID must be lowercase letters, digits, or hyphens"),
+  WORKER_POLL_INTERVAL_MS: positiveInt(10_000),
+  WORKER_HEARTBEAT_INTERVAL_MS: positiveInt(30_000),
+  WORKER_OFFLINE_AFTER_SECONDS: positiveInt(120),
+  WORKER_LEASE_SECONDS: positiveInt(900),
+  WORKER_MAX_ATTEMPTS: positiveInt(5),
+  PUBLISH_VERIFY_TIMEOUT_MS: positiveInt(15_000),
+  CODEX_BIN: nonEmpty.default("codex"),
+  CLAUDE_BIN: nonEmpty.default("claude"),
+  OPENAI_API_KEY: nonEmpty.optional(),
+  ANTHROPIC_API_KEY: nonEmpty.optional(),
+  GEMINI_API_KEY: nonEmpty.optional(),
+});
+
+export type WorkerEnv = z.infer<typeof workerEnvSchema>;
+
+export type ApiProvider = "openai" | "anthropic" | "gemini";
+
+const apiKeyByProvider = {
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  gemini: "GEMINI_API_KEY",
+} as const satisfies Record<ApiProvider, keyof WorkerEnv>;
+
+export class WorkerConfigError extends Error {
+  readonly issues: readonly string[];
+
+  constructor(issues: readonly string[]) {
+    super(`Invalid worker configuration:\n- ${issues.join("\n- ")}`);
+    this.name = "WorkerConfigError";
+    this.issues = issues;
+  }
+}
+
+/**
+ * Parses worker configuration. `apiProvidersInUse` lists providers whose
+ * stages are currently configured for `api` mode; only their keys are required.
+ * Error messages name variables but never echo their values.
+ */
+export function parseWorkerEnv(
+  source: Record<string, string | undefined>,
+  apiProvidersInUse: readonly ApiProvider[] = [],
+): WorkerEnv {
+  // Treat empty strings from `.env` templates as unset.
+  const cleaned = Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined && value.trim() !== ""),
+  );
+
+  const result = workerEnvSchema.safeParse(cleaned);
+  if (!result.success) {
+    throw new WorkerConfigError(
+      result.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`),
+    );
+  }
+
+  const missing = [...new Set(apiProvidersInUse)]
+    .map((provider) => apiKeyByProvider[provider])
+    .filter((key) => result.data[key] === undefined)
+    .map((key) => `${key}: required because a stage is configured for API mode`);
+  if (missing.length > 0) {
+    throw new WorkerConfigError(missing);
+  }
+
+  return result.data;
+}

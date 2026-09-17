@@ -1,0 +1,12 @@
+packages:
+  - "."
+  - "local-worker"
+
+# Scripts run with this exact Node version, which pnpm downloads on demand.
+# The system Node on the owner's PC is not changed. Keep in sync with .nvmrc
+# and package.json#engines.
+useNodeVersion: 24.21.0
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

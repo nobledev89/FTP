@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# testing
+coverage/
+playwright-report/
+test-results/
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# typescript
+*.tsbuildinfo
+
+# local worker build/runtime output
+local-worker/dist/
+local-worker/.runtime/
+
+# supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# env files: only the documented example is committed
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# secrets and keys
+*.pem
+*.key
+
+# temporary reference checkouts (e.g. Paperframe review)
+.reference/
+
+# logs and OS noise
+*.log
+.DS_Store
+Thumbs.db

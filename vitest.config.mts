@@ -1,0 +1,24 @@
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    projects: [
+      {
+        resolve: { tsconfigPaths: true },
+        test: {
+          name: "web",
+          environment: "node",
+          include: ["src/**/*.test.{ts,tsx}"],
+        },
+      },
+      {
+        test: {
+          name: "worker",
+          environment: "node",
+          root: "./local-worker",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+    ],
+  },
+});
