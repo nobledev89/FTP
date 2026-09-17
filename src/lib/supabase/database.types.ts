@@ -1609,6 +1609,7 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["job_status"]
       }
+      worker_status: { Args: { p_worker_id: string }; Returns: Json }
     }
     Enums: {
       action_required_kind:

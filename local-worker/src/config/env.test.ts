@@ -15,6 +15,8 @@ describe("parseWorkerEnv", () => {
     const env = parseWorkerEnv(base);
     expect(env.WORKER_POLL_INTERVAL_MS).toBe(10_000);
     expect(env.WORKER_LEASE_SECONDS).toBe(900);
+    expect(env.WORKER_SHUTDOWN_TIMEOUT_MS).toBe(30_000);
+    expect(env.WORKER_HOST_LABEL).toBeUndefined();
     expect(env.CLAUDE_BIN).toBe("claude");
     expect(env.OPENAI_API_KEY).toBeUndefined();
   });
@@ -42,5 +44,22 @@ describe("parseWorkerEnv", () => {
       expect(message).toContain("WORKER_ID");
       expect(message).not.toContain(secret);
     }
+  });
+
+  it("requires heartbeat and offline thresholds to leave safety margins", () => {
+    expect(() =>
+      parseWorkerEnv({
+        ...base,
+        WORKER_LEASE_SECONDS: "30",
+        WORKER_HEARTBEAT_INTERVAL_MS: "16000",
+      }),
+    ).toThrow(/WORKER_HEARTBEAT_INTERVAL_MS/);
+    expect(() =>
+      parseWorkerEnv({
+        ...base,
+        WORKER_HEARTBEAT_INTERVAL_MS: "30000",
+        WORKER_OFFLINE_AFTER_SECONDS: "30",
+      }),
+    ).toThrow(/WORKER_OFFLINE_AFTER_SECONDS/);
   });
 });

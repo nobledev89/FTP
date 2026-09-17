@@ -9,9 +9,13 @@
     "node": "24.x"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "worker:once": "tsx src/cli/main.ts once",
+    "worker:start": "tsx src/cli/main.ts start",
+    "worker:status": "tsx src/cli/main.ts status"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.116.0",
     "zod": "^4"
   },
   "devDependencies": {

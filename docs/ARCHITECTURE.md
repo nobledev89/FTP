@@ -78,6 +78,20 @@ never appear in `NEXT_PUBLIC_*` variables, browser bundles, prompts, logs, or da
 The full status list and transition rules are in the plan, section 8, and the executable application
 contract is documented in [STATE-MACHINE.md](STATE-MACHINE.md).
 
+## Local worker runtime
+
+The worker uses a handler registry as its claim allowlist. `claim_next_job` receives only registered
+stages; an empty registry claims nothing. This lets the queue runtime ship before provider adapters
+without consuming work it cannot finish. A claimed handler runs behind a lease keepalive and an abort
+signal. Completion/manual-wait settlement is single-use locally and is checked again by the database
+lease token. Transient failures receive jittered stage-specific backoff, while authentication,
+subscription usage limits, and invalid provider output require a human.
+
+Every cycle heartbeats and recovers expired leases before claiming. `worker:status` is separate and
+read-only, using `worker_status` to observe the heartbeat and exact queue counts without changing
+either. Operational setup is in [LOCAL-WORKER.md](LOCAL-WORKER.md), with Hermes and Task Scheduler
+examples in [HERMES.md](HERMES.md).
+
 ## Admin authentication and authorization
 
 Four layers, each independent of the others

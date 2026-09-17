@@ -67,13 +67,18 @@ Then sign in at <http://localhost:3000/admin/login>. See
 | `pnpm test:integration`             | Schema, RLS, queue, state machine, and Storage tests (local Supabase) |
 | `pnpm test:e2e`                     | Production build plus Playwright design and signed-out admin checks   |
 | `pnpm test:e2e:admin`               | Authenticated admin console checks (needs the local Supabase stack)   |
+| `pnpm worker:once`                  | Recover leases and process at most one supported worker stage         |
+| `pnpm worker:start`                 | Run the worker polling daemon with graceful shutdown                  |
+| `pnpm worker:status`                | Read worker heartbeat and queue health without changing jobs          |
 | `pnpm supabase:start` / `:stop`     | Start or stop the local Supabase stack                                |
 | `pnpm supabase:reset`               | Rebuild the local database from migrations and seed data              |
 | `pnpm db:lint`                      | `plpgsql_check` over database functions                               |
 | `pnpm db:types`                     | Regenerate database types for the web app and worker                  |
 | `pnpm format` / `pnpm format:check` | Prettier                                                              |
 
-Worker scripts (`worker:once`, `worker:start`, `worker:status`) arrive in Phase 5.
+Worker setup and operational behaviour are documented in
+[docs/LOCAL-WORKER.md](docs/LOCAL-WORKER.md). Phase 5 registers no provider handlers, so the worker
+does not claim provider work until the mock pipeline arrives in Phase 6.
 
 ## Documentation
 
@@ -83,6 +88,8 @@ Worker scripts (`worker:once`, `worker:start`, `worker:status`) arrive in Phase 
 - [Supabase](docs/SUPABASE.md)
 - [Admin console](docs/ADMIN-CONSOLE.md)
 - [State machine](docs/STATE-MACHINE.md)
+- [Local worker](docs/LOCAL-WORKER.md)
+- [Hermes and Windows scheduling](docs/HERMES.md)
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)

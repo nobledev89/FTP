@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 4 — Authentication and admin shell (`COMPLETE`)              |
-| Current task           | Phase 5 ready: local worker package, CLI, and queue safety         |
-| Last updated           | 2026-09-18 00:20, Asia/Singapore                                  |
+| Current phase          | Phase 5 — Local worker and queue safety (`COMPLETE`)               |
+| Current task           | Phase 6 ready: deterministic mock pipeline end to end             |
+| Last updated           | 2026-09-18 07:44, Asia/Singapore                                  |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `f702fba` Phase 3; Phase 4 is included in this session's commit    |
+| Relevant commit        | `7f8e372` Phase 4 CI record; Phase 5 is included in this session's commit |
 | Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. |
-| Next action            | Begin Phase 5 with the Windows-compatible worker package, `worker:once`/`worker:start`/`worker:status`, and lease safety. |
+| Next action            | Begin Phase 6 with deterministic mock research, draft, image, audit, revision, publish, and verification handlers. |
 
 ## Status legend
 
@@ -32,7 +32,7 @@ This is the authoritative live record of implementation progress. Update it imme
 |     2 | Supabase schema and security                       | `COMPLETE`    |     100% | 2026-09-17 | Fresh `supabase db reset` applies 7 migrations and seed; `db:lint` clean; 90 integration tests pass twice in a row (schema/grants, RLS matrix, queue concurrency and leases, state machine and publication boundary, Storage). Local only; GitHub CI job added but not run. |
 |     3 | Domain services and state machine                  | `COMPLETE`    |     100% | 2026-09-17 | 163 unit tests and 93 integration tests pass; transition map is in exact database parity; format, lint, typecheck, and production build pass. |
 |     4 | Authentication and admin shell                     | `COMPLETE`    |     100% | 2026-09-18 | 240 unit tests, 112 integration tests, 57 signed-out Playwright checks, and 10 authenticated Playwright checks pass; format, lint, typecheck, and production build pass. |
-|     5 | Local worker and queue safety                      | `NOT_STARTED` |       0% | —         | —                |
+|     5 | Local worker and queue safety                      | `COMPLETE`    |     100% | 2026-09-18 | 258 unit tests and 113 integration tests pass; concurrent claims, lease renewal/loss/recovery, shutdown retry, duplicate settlement fencing, redaction, status, CLI smoke checks, schema lint, types, and build verified. |
 |     6 | Mock pipeline end to end                           | `NOT_STARTED` |       0% | —         | —                |
 |     7 | Public publication                                 | `NOT_STARTED` |       0% | —         | —                |
 |     8 | Manual provider workflows                          | `NOT_STARTED` |       0% | —         | —                |
@@ -42,6 +42,15 @@ This is the authoritative live record of implementation progress. Update it imme
 |    12 | Operations, documentation, and release QA          | `NOT_STARTED` |       0% | —         | —                |
 
 ## Active phase checklist
+
+### Phase 5 — Local worker and queue safety
+
+- [x] Build the Windows-compatible worker runtime and root/package CLI scripts.
+- [x] Implement safe claim filtering, heartbeat, lease renewal, expiry recovery, graceful shutdown, and retry/backoff.
+- [x] Add structured redacted logging and read-only worker/queue status reporting.
+- [x] Test concurrent workers, lease keepalive/loss, graceful shutdown, crash recovery, and duplicate completion fencing.
+- [x] Document manual operation, Hermes invocation, and Windows Task Scheduler.
+- [x] Run the full Phase 5 verification gate and record its evidence.
 
 ### Phase 1 — Paperframe design lock
 
@@ -145,6 +154,40 @@ This is the authoritative live record of implementation progress. Update it imme
 - **Decision: explicit function grants only.** PostgreSQL ignores per-schema default-privilege revokes of the global `PUBLIC EXECUTE` default, so the foundation migration revokes it globally. The grants migration then grants API roles only the functions they need. A schema test found and now guards this.
 
 ## Completion log
+
+### 2026-09-18 — Phase 5 local worker and queue safety complete
+
+Date/time: 2026-09-18 07:44, Asia/Singapore
+
+Phase/task: Phase 5 — Windows-compatible local worker, CLI, queue safety, and operations
+
+Status change: Phase 5 `IN_PROGRESS` → `COMPLETE`. Current task moves to Phase 6.
+
+What changed: Added root and package `worker:once`, `worker:start`, and `worker:status` commands; a fixed-path worker-only `.env.local` loader and bounded environment contract; a typed service-role Supabase store; the handler-gated `WorkerRunner`; active heartbeat and lease renewal; expired-lease recovery; single-settlement fencing; graceful signal cancellation; retry classification with jittered stage-specific exponential backoff; structured JSON logging with field and free-text redaction; and a validated worker-status report. Added the service-role-only, read-only `worker_status` RPC, which returns exact queue counts, heartbeat state inputs, thresholds, delayed work, failures, and action requirements without heartbeat, claim, or recovery side effects. Added `docs/LOCAL-WORKER.md` and `docs/HERMES.md` with manual, Hermes, and Windows Task Scheduler contracts. Phase 5 deliberately registers no provider handlers: it passes an empty stage allowlist and cannot consume work before Phase 6 installs the mock adapters.
+
+Files/migrations affected: `local-worker/src/{cli,config,db,logging,queue,status}/**`; `supabase/migrations/20260918110000_worker_status.sql`; generated web/worker database types; `tests/integration/{queue,schema}.test.ts`; root and worker `package.json`; `.env.example`; `README.md`; `docs/{ARCHITECTURE,SUPABASE,LOCAL-WORKER,HERMES}.md`; `pnpm-lock.yaml`.
+
+Verification performed: A fresh `pnpm supabase:reset` applied all nine migrations and seed data. `pnpm db:lint` reports no schema errors; `pnpm db:types` is stable on regeneration. `pnpm format:check`, `pnpm lint`, and `pnpm typecheck` pass. `pnpm test` passes 258 tests in 23 files, including 21 worker tests for environment safety margins, secret/path/email redaction, JSON-line logging, error classification, capped jittered backoff, handler-gated claims, two concurrent runners processing one claim once, active lease renewal, graceful-shutdown retry, lease-loss abandonment, duplicate settlement fencing, and heartbeat-state classification. `pnpm test:integration` passes 113 tests in 7 files, including the existing overlapping-transaction `SKIP LOCKED` claim test, concurrent distribution, renewal without a lock-version bump, killed-worker expiry recovery and stale-token fencing, final-attempt failure, and the new read-only status snapshot. `pnpm build` completes the Next.js 16.3.5 production build. Against local Supabase, `pnpm worker:once` heartbeated/recovered and exited idle without claiming unsupported work; `pnpm worker:status` reported the worker online with exact queue counts; and `pnpm worker:start` launched the polling daemon.
+
+Result: Passed. Two workers cannot process the same stage, a killed worker's lease is safely recovered, stale completion is fenced with `FT003`, and the worker runtime does not claim any stage without a registered handler.
+
+Commit/PR: Included in this session's Phase 5 commit on `main`.
+
+Next action: Start Phase 6 with deterministic mock handlers and drive a mock job through every artifact and state transition to `VERIFIED`.
+
+### 2026-09-18 — Phase 5 local worker and queue safety started
+
+Date/time: 2026-09-18 07:23, Asia/Singapore
+
+Phase/task: Phase 5 — Windows-compatible worker runtime, CLI, queue safety, and operations
+
+Status change: Phase 5 `NOT_STARTED` → `IN_PROGRESS`.
+
+What changed: Reconciled the Phase 5 acceptance criteria with the existing queue, lease, state-machine, and service-role contracts. The worker will claim only stages for which a handler is registered, so the Phase 5 CLI cannot consume provider work before Phase 6 installs the mock pipeline handlers.
+
+Verification performed: Repository and Phase 4 handoff reviewed; implementation is in progress.
+
+Next action: Implement the worker store/runtime, CLI commands, retry and logging contracts, database status surface, safety tests, and Windows operations documentation.
 
 ### 2026-09-18 - Phase 4 authentication and admin shell complete
 

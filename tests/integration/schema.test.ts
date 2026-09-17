@@ -74,6 +74,7 @@ describe("migrations", () => {
       "record_verification",
       "recover_expired_leases",
       "heartbeat_worker",
+      "worker_status",
     ];
     const allowed = await rows<{ name: string; service: boolean }>(
       `select p.proname as name, has_function_privilege('service_role', p.oid, 'execute') as service

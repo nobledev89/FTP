@@ -81,6 +81,10 @@ Design rules enforced by the database:
 | `publish_article`        | The publication boundary (plan section 8.3); marks copied images published and snapshots the approved draft            |
 | `record_verification`    | Logs each live check; `VERIFIED` only when all eight pass, otherwise stays `PUBLISHED` and retries                     |
 | `recover_expired_leases` | Returns expired work to its pending status, or `FAILED` after the final attempt                                        |
+| `worker_status`          | Read-only heartbeat, thresholds, and exact queue-health snapshot for the configured worker                             |
+
+`worker_status` is the only worker RPC that is deliberately observation-only: it does not heartbeat,
+recover leases, or claim work. This keeps `pnpm worker:status` safe for monitoring probes.
 
 ## Admin functions (authenticated)
 

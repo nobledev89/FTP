@@ -8,31 +8,54 @@ import { z } from "zod";
  * subscription CLI modes.
  */
 
-const positiveInt = (fallback: number) => z.coerce.number().int().positive().default(fallback);
+const boundedInt = (fallback: number, minimum: number, maximum: number) =>
+  z.coerce.number().int().min(minimum).max(maximum).default(fallback);
 
 const nonEmpty = z.string().trim().min(1);
 
-export const workerEnvSchema = z.object({
-  SUPABASE_URL: z.url(),
-  SUPABASE_SERVICE_ROLE_KEY: nonEmpty,
-  PUBLIC_SITE_URL: z.url(),
-  REVALIDATION_SECRET: z.string().min(32, "REVALIDATION_SECRET must be at least 32 characters"),
-  WORKER_ID: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9-]{1,62}$/, "WORKER_ID must be lowercase letters, digits, or hyphens"),
-  WORKER_POLL_INTERVAL_MS: positiveInt(10_000),
-  WORKER_HEARTBEAT_INTERVAL_MS: positiveInt(30_000),
-  WORKER_OFFLINE_AFTER_SECONDS: positiveInt(120),
-  WORKER_LEASE_SECONDS: positiveInt(900),
-  WORKER_MAX_ATTEMPTS: positiveInt(5),
-  PUBLISH_VERIFY_TIMEOUT_MS: positiveInt(15_000),
-  CODEX_BIN: nonEmpty.default("codex"),
-  CLAUDE_BIN: nonEmpty.default("claude"),
-  OPENAI_API_KEY: nonEmpty.optional(),
-  ANTHROPIC_API_KEY: nonEmpty.optional(),
-  GEMINI_API_KEY: nonEmpty.optional(),
-});
+export const workerEnvSchema = z
+  .object({
+    SUPABASE_URL: z.url(),
+    SUPABASE_SERVICE_ROLE_KEY: nonEmpty,
+    PUBLIC_SITE_URL: z.url(),
+    REVALIDATION_SECRET: z.string().min(32, "REVALIDATION_SECRET must be at least 32 characters"),
+    WORKER_ID: z
+      .string()
+      .trim()
+      .regex(
+        /^[a-z0-9][a-z0-9-]{1,62}$/,
+        "WORKER_ID must be lowercase letters, digits, or hyphens",
+      ),
+    WORKER_HOST_LABEL: z.string().trim().min(1).max(80).optional(),
+    WORKER_POLL_INTERVAL_MS: boundedInt(10_000, 250, 300_000),
+    WORKER_HEARTBEAT_INTERVAL_MS: boundedInt(30_000, 1_000, 300_000),
+    WORKER_OFFLINE_AFTER_SECONDS: boundedInt(120, 10, 7_200),
+    WORKER_LEASE_SECONDS: boundedInt(900, 30, 3_600),
+    WORKER_MAX_ATTEMPTS: boundedInt(5, 1, 20),
+    WORKER_SHUTDOWN_TIMEOUT_MS: boundedInt(30_000, 1_000, 300_000),
+    PUBLISH_VERIFY_TIMEOUT_MS: boundedInt(15_000, 1_000, 300_000),
+    CODEX_BIN: nonEmpty.default("codex"),
+    CLAUDE_BIN: nonEmpty.default("claude"),
+    OPENAI_API_KEY: nonEmpty.optional(),
+    ANTHROPIC_API_KEY: nonEmpty.optional(),
+    GEMINI_API_KEY: nonEmpty.optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.WORKER_HEARTBEAT_INTERVAL_MS * 2 > value.WORKER_LEASE_SECONDS * 1_000) {
+      context.addIssue({
+        code: "custom",
+        path: ["WORKER_HEARTBEAT_INTERVAL_MS"],
+        message: "must be at most half of WORKER_LEASE_SECONDS",
+      });
+    }
+    if (value.WORKER_OFFLINE_AFTER_SECONDS * 1_000 <= value.WORKER_HEARTBEAT_INTERVAL_MS) {
+      context.addIssue({
+        code: "custom",
+        path: ["WORKER_OFFLINE_AFTER_SECONDS"],
+        message: "must be longer than WORKER_HEARTBEAT_INTERVAL_MS",
+      });
+    }
+  });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
 

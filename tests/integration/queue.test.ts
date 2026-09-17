@@ -193,6 +193,45 @@ describe("leases", () => {
   });
 });
 
+describe("worker status", () => {
+  it("reports heartbeat and exact queue health without claiming or recovering work", async () => {
+    const firstJobId = await startedJob();
+    const secondJobId = await startedJob();
+    const leased = (await claim(WORKER_A, undefined, 300))!;
+    expect([firstJobId, secondJobId]).toContain(leased.job_id);
+    const claimableJobId = leased.job_id === firstJobId ? secondJobId : firstJobId;
+
+    await unwrap(
+      serviceClient().rpc("heartbeat_worker", {
+        p_worker_id: WORKER_A,
+        p_host_label: "test-host",
+        p_version: "0.1.0-test",
+        p_current_job_id: leased.job_id,
+        p_current_stage: leased.stage,
+        p_health: { state: "working" },
+      }),
+    );
+
+    const before = await jobRow(claimableJobId);
+    const snapshot = await unwrap(serviceClient().rpc("worker_status", { p_worker_id: WORKER_A }));
+    const after = await jobRow(claimableJobId);
+    expect(snapshot).toMatchObject({
+      worker: {
+        worker_id: WORKER_A,
+        host_label: "test-host",
+        current_job_id: leased.job_id,
+        current_stage: "research",
+      },
+      queue: {
+        claimable: 1,
+        leased: 1,
+        expired_leases: 0,
+      },
+    });
+    expect(after).toEqual(before);
+  });
+});
+
 describe("failures and manual waits", () => {
   it("schedules retries with backoff and hides the job until it is due", async () => {
     const jobId = await startedJob();
