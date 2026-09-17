@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 2 — Supabase schema and security (Phase 1 awaiting owner design sign-off) |
-| Current task           | Initialize Supabase local configuration and ordered migrations    |
-| Last updated           | 2026-09-17 18:52, Asia/Singapore                                  |
+| Current phase          | First slice (Phases 0–2) implemented; awaiting owner review before Phase 3 |
+| Current task           | Owner review: design fixtures (Phase 1 exit) and schema/security contracts (plan section 25) |
+| Last updated           | 2026-09-17 19:24, Asia/Singapore                                  |
 | Branch                 | `main` (local; not yet pushed to `origin`)                        |
-| Relevant commit        | `a86d8d4` Phase 0; Phase 1 commit hash recorded in the next log entry |
-| Active blockers        | None for Phase 2. Phase 1 exit needs the owner's design review of the fixture pages. |
-| Next action            | Run `supabase init` and write the extensions/enums migration      |
+| Relevant commit        | `a86d8d4` Phase 0; `9aa044e` Phase 1; Phase 2 commit hash recorded in the next log entry |
+| Active blockers        | Owner design sign-off (Phase 1). Owner acceptance of the Phase 0–2 contracts before Phase 3 (plan section 25). Push to GitHub needs owner confirmation; GitHub CI has not run. |
+| Next action            | Owner reviews `/design-review` pages and `docs/SUPABASE.md`, then confirms the push to `origin` |
 
 ## Status legend
 
@@ -29,7 +29,7 @@ This is the authoritative live record of implementation progress. Update it imme
 | ----: | -------------------------------------------------- | ------------- | -------: | --------- | ---------------- |
 |     0 | Repository and architecture baseline               | `COMPLETE`    |     100% | 2026-09-17 | Local gate passed: frozen install, format, lint, typecheck, 4 unit tests, build. GitHub CI not yet run (not pushed). Commit `a86d8d4`. |
 |     1 | Paperframe design lock                             | `IN_PROGRESS` |      90% | —         | Implemented; 29 unit tests and 40 Playwright checks pass at 375/768/1024/1440px; agent visual review done; production build 404s fixture routes. Owner design sign-off pending. |
-|     2 | Supabase schema and security                       | `IN_PROGRESS` |       0% | —         | —                |
+|     2 | Supabase schema and security                       | `COMPLETE`    |     100% | 2026-09-17 | Fresh `supabase db reset` applies 7 migrations and seed; `db:lint` clean; 90 integration tests pass twice in a row (schema/grants, RLS matrix, queue concurrency and leases, state machine and publication boundary, Storage). Local only; GitHub CI job added but not run. |
 |     3 | Domain services and state machine                  | `NOT_STARTED` |       0% | —         | —                |
 |     4 | Authentication and admin shell                     | `NOT_STARTED` |       0% | —         | —                |
 |     5 | Local worker and queue safety                      | `NOT_STARTED` |       0% | —         | —                |
@@ -55,15 +55,23 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Run the gate and record design-review evidence at 375/768/1024/1440px.
 - [ ] Owner design review of `/design-review`, `/design-review/archive`, `/design-review/article`, and `/admin/design-review` (run `pnpm test:e2e` for screenshots in `test-results/design-review/`). After sign-off, store approved baselines and mark Phase 1 `COMPLETE`.
 
-### Phase 2 — Supabase schema and security
+### Phase 2 — Supabase schema and security (complete; kept for review)
 
-- [ ] Initialize Supabase local configuration and ordered migrations.
-- [ ] Create enums, all required/supporting tables, constraints, indexes, triggers, transition/publish/claim RPCs, and seed data.
-- [ ] Configure Auth assumptions and `admin_users` bootstrap instructions.
-- [ ] Add RLS and Storage bucket policies.
-- [ ] Generate TypeScript database types.
-- [ ] Add migration and RLS integration tests against local Supabase.
-- [ ] Verify a fresh reset applies all migrations and anonymous/admin/worker access tests pass.
+- [x] Initialize Supabase local configuration and ordered migrations.
+- [x] Create enums, all required/supporting tables, constraints, indexes, triggers, transition/publish/claim RPCs, and seed data.
+- [x] Configure Auth assumptions and `admin_users` bootstrap instructions (`docs/SUPABASE.md`, `private.bootstrap_first_owner`).
+- [x] Add RLS and Storage bucket policies.
+- [x] Generate TypeScript database types (`pnpm db:types` for web and worker).
+- [x] Add migration and RLS integration tests against local Supabase.
+- [x] Verify a fresh reset applies all migrations and anonymous/admin/worker access tests pass.
+
+### Phase 3 — Domain services and state machine (next, after owner review)
+
+- [ ] Implement Zod schemas and repository/service boundaries.
+- [ ] Implement the pure TypeScript transition map, with a parity test against `private.job_transitions`.
+- [ ] Implement event append, artifact version helpers, optimistic concurrency, and pause/resume/retry/human-resolution clients over the Phase 2 functions.
+- [ ] Add table-driven tests for every allowed and rejected transition.
+- [ ] Write `docs/STATE-MACHINE.md`.
 
 ## Blockers and decisions
 
@@ -75,8 +83,27 @@ This is the authoritative live record of implementation progress. Update it imme
 - **Decision: masthead mobile size is fluid (deviation D13).** At the plan's fixed 60px, "FinTechPulse" is 382px wide and overflowed the 343px column at 375px. It now uses `clamp(2.5rem, 14vw, 3.75rem)` below 640px; larger sizes are unchanged.
 - **Decision: no automatic hyphenation in headings.** `hyphens: auto` split headline words mid-word at desktop widths; `overflow-wrap: break-word` alone prevents overflow.
 - **Decision: `experimental.globalNotFound` enabled.** Needed for a styled 404 on unmatched URLs with two root layouts. It is an experimental Next.js flag; re-check on Next.js upgrades.
+- **Decision: the database enforces the state machine, not just the worker.** A trigger rejects direct status, lease, and workflow-column edits from every role (including the service role) and any status pair missing from `private.job_transitions`. `PUBLISHED` and `VERIFIED` are reachable only inside `publish_article` and `record_verification`, and `articles` rows can be written only there. Phase 3's TypeScript map must mirror `private.job_transitions`.
+- **Decision: internal linkage lives on `article_jobs`, not `articles`.** `articles` holds only publication-safe columns (including hero-image and source snapshots with private sources excluded), so a plain RLS row filter is enough for public reads.
+- **Decision: `claim_next_job` also claims publishing and verification.** Due `SCHEDULED` jobs, auto-publish `APPROVED` jobs, and `PUBLISHED` jobs with a due verification are claimed with leases like other stages, so publishing cannot run twice.
+- **Decision: revision cycles count on completion.** `revision_count` increments when `REVISING → RE_AUDIT_PENDING` completes, so network retries never consume one of the two automatic cycles.
+- **Decision: admin writes go through `create_article_job` and `admin_transition_job`.** `authenticated` has no table write privileges. Settings, prompt, and manual-import functions arrive with the phases that need them (4, 6, 8).
+- **Decision: public sign-up disabled; email provider enabled.** Setting `[auth.email] enable_signup = false` also disables email login, so sign-up is blocked with the global `[auth] enable_signup = false` instead (found by the RLS tests).
+- **Decision: explicit function grants only.** PostgreSQL ignores per-schema default-privilege revokes of the global `PUBLIC EXECUTE` default, so the foundation migration revokes it globally. The grants migration then grants API roles only the functions they need. A schema test found and now guards this.
 
 ## Completion log
+
+### 2026-09-17 — Phase 2 Supabase schema and security complete
+
+Date/time: 2026-09-17 19:24, Asia/Singapore  
+Phase/task: Phase 2 — Supabase schema and security  
+Status change: Phase 2 `IN_PROGRESS` → `COMPLETE`. Current task moves to owner review of the first slice (plan section 25) before Phase 3.  
+What changed: Initialized `supabase/config.toml` (project `fintechpulse`, public sign-up disabled, 12-character minimum password, edge runtime and analytics off, 10 MiB uploads). Wrote seven ordered migrations. **Foundation:** `private` schema, global and per-schema privilege hardening, 22 enums, and immutable helpers. **Identity and config:** `sites`, `admin_users`, `prompt_templates`, `site_settings`, `provider_settings` (API modes require confirmation; secret-looking keys rejected), `worker_instances`, and authorization helpers. **Content and artifacts:** `article_jobs` with lease, state, and linkage constraints; `provider_runs`; `research_packets`; `sources`; `claims`; `claim_sources`; `drafts`; `audits`; `images`; `articles`; `article_slug_aliases`; `job_events`; `publishing_logs`; `originality_checks`. These use composite same-job foreign keys, immutability triggers, and append-only history. **State machine and queue:** `private.job_transitions` (22 normal transitions plus pause, resume, failure, escalate, resolve, retry, and recovery), a guard trigger on jobs and articles, and service-role functions `heartbeat_worker`, `claim_next_job` (`FOR UPDATE SKIP LOCKED`, recovers expired leases first), `renew_lease`, `complete_stage` (stage gates plus automatic follow-on transitions), `request_manual_action`, `fail_stage`, `publish_article` (publication boundary, plan section 8.3), `record_verification`, and `recover_expired_leases`. Admin functions `create_article_job` and `admin_transition_job` (start, pause, resume, retry, mark_needs_human, resolve, schedule) check `lock_version`. Added the owner bootstrap `private.bootstrap_first_owner`, which no API role can run. **RLS and grants:** RLS on all 20 public tables, explicit grants, public reads limited to `sites` and due published articles, admin-only editorial reads. **Storage:** private `article-work` (editor uploads under existing `jobs/<id>/`, immutable) and public-read `article-public` (service role writes only), images only. **Indexes:** claim, lease expiry, action required, dashboard status, public article list, provider runs, event timeline, audit verdict, publishing logs, worker heartbeat, and artifact lookups. Seed data: the UK site row, site settings, and non-billable provider defaults. Added `pnpm supabase:start|stop|reset`, `db:lint`, `db:types` (Node script, Windows-safe), and `test:integration`. Generated database types for web and worker. Added integration tests and a CI `database` job. Wrote `docs/SUPABASE.md` covering local workflow, schema rules, access matrix, function reference, error codes, Storage, auth assumptions, and hosted setup with owner bootstrap.  
+Files/migrations affected: `supabase/config.toml`, `supabase/seed.sql`, `supabase/migrations/20260917100000_foundation.sql`, `…100100_identity_and_config.sql`, `…100200_content_and_artifacts.sql`, `…100300_state_machine_and_queue.sql`, `…100400_rls_and_grants.sql`, `…100500_storage.sql`, `…100600_indexes.sql`, `scripts/generate-db-types.mjs`, `src/lib/supabase/database.types.ts`, `local-worker/src/db/database.types.ts`, `tests/integration/**`, `vitest.integration.config.mts`, `docs/SUPABASE.md`, `README.md`, `.github/workflows/ci.yml`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `eslint.config.mjs`, `.prettierignore`.  
+Verification performed: `pnpm supabase:reset` from scratch applied all seven migrations and seed. `pnpm db:lint` (`plpgsql_check`, fail on warning): no issues; it had earlier found an unused variable and a missing enum cast, both fixed. `pnpm test:integration`: 5 files, 90 tests passed, then passed again without a reset. The tests cover: RLS on every table; exact anon and authenticated table and function grants; private helper grants; an owner bootstrap that runs once; the transition map; seed defaults; API-mode and secret constraints; anon, non-admin, viewer, editor, and service-role access across all 17 editorial tables; self-promotion blocked; deactivation revokes access; two overlapping transactions cannot claim the same job; 12 concurrent claims over 5 jobs claim each job exactly once; lease renewal fencing without a `lock_version` bump; crash recovery with a stale worker fenced off; a final-attempt lease expiry fails the job; retry backoff; auth and usage-limit errors cannot retry; manual waits release the lease; stale `lock_version` rejected; pause releases a running lease; direct status, lease, and history edits rejected for the service role; stage gates; image readiness; exactly two revision cycles, then human escalation with a required note; resolution cannot skip ahead; a full lifecycle to `VERIFIED` through publish and failed, skipped, and successful verification attempts with log counts; forged articles and `PUBLISHED` transitions rejected; slug conflict `FT006`; scheduled publication waits; artifact immutability with review metadata allowed; cross-job references rejected; Storage bucket policies for each role, overwrite and delete protection, public URL serving, and MIME restriction. Query plans with 5,000 jobs, in a rolled-back transaction, use `article_jobs_claim_idx`, `article_jobs_lease_expiry_idx`, and `article_jobs_site_status_idx`. `pnpm format:check`, `pnpm lint`, and `pnpm typecheck` are clean. `pnpm test` passes 29 tests. `pnpm test:e2e` builds and passes 40 checks (no UI regression). Findings fixed during verification: the email login config, the mock-run provider constraint, a PUBLIC EXECUTE grant on a private helper, and bulk-insert null defaults in the test fixtures (a note for the Phase 5 worker).  
+Result: Passed locally. The Phase 2 exit criterion is met. GitHub CI has not run.  
+Commit/PR: Local commit `feat: phase 2 supabase schema and security` on `main`; Phase 1 is `9aa044e`. Not pushed.  
+Next action: Owner reviews the design fixtures and the Phase 0–2 contracts and confirms the push. Then Phase 3 begins with the TypeScript transition map and a parity test against `private.job_transitions`.
 
 ### 2026-09-17 — Phase 1 design lock implemented; owner sign-off pending
 

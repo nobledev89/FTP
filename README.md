@@ -33,31 +33,40 @@ You do not need to install Node 24. pnpm downloads the pinned runtime (`24.21.0`
 
 ```powershell
 pnpm install
-Copy-Item .env.example .env.local   # then fill in values
+pnpm supabase:start                  # local Postgres, Auth, and Storage in Docker
+Copy-Item .env.example .env.local    # then fill in values from `pnpm exec supabase status`
 pnpm dev
 ```
 
 Open <http://localhost:3000>. Design review fixtures are at `/design-review` and `/admin/design-review`
-(outside Vercel production).
+(outside Vercel production). Supabase setup, the access model, and hosted-project steps are in
+[docs/SUPABASE.md](docs/SUPABASE.md).
 
 ## Scripts
 
-| Command                             | What it does                                         |
-| ----------------------------------- | ---------------------------------------------------- |
-| `pnpm dev`                          | Start the Next.js dev server                         |
-| `pnpm build` / `pnpm start`         | Production build and server                          |
-| `pnpm lint`                         | ESLint across the workspace                          |
-| `pnpm typecheck`                    | Generate route types, then type-check web and worker |
-| `pnpm test`                         | Unit tests (web and worker Vitest projects)          |
-| `pnpm format` / `pnpm format:check` | Prettier                                             |
+| Command                             | What it does                                                          |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| `pnpm dev`                          | Start the Next.js dev server                                          |
+| `pnpm build` / `pnpm start`         | Production build and server                                           |
+| `pnpm lint`                         | ESLint across the workspace                                           |
+| `pnpm typecheck`                    | Generate route types, then type-check web, worker, and tests          |
+| `pnpm test`                         | Unit tests (web and worker Vitest projects)                           |
+| `pnpm test:integration`             | Schema, RLS, queue, state machine, and Storage tests (local Supabase) |
+| `pnpm test:e2e`                     | Production build plus Playwright design-review checks                 |
+| `pnpm supabase:start` / `:stop`     | Start or stop the local Supabase stack                                |
+| `pnpm supabase:reset`               | Rebuild the local database from migrations and seed data              |
+| `pnpm db:lint`                      | `plpgsql_check` over database functions                               |
+| `pnpm db:types`                     | Regenerate database types for the web app and worker                  |
+| `pnpm format` / `pnpm format:check` | Prettier                                                              |
 
-Integration, end-to-end, worker, and Supabase scripts are added in the phases that implement them.
+Worker scripts (`worker:once`, `worker:start`, `worker:status`) arrive in Phase 5.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Decision records](docs/decisions/README.md)
 - [Design system](docs/DESIGN-SYSTEM.md)
+- [Supabase](docs/SUPABASE.md)
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)

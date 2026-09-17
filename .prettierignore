@@ -12,3 +12,4 @@ docs/IMPLEMENTATION-STATUS.md
 playwright-report
 test-results
 .reference
+local-worker/src/db/database.types.ts

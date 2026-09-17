@@ -19,7 +19,13 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:e2e": "next build && playwright test"
+    "test:e2e": "next build && playwright test",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "db:lint": "supabase db lint --local --schema public,private --level warning --fail-on warning",
+    "db:types": "node scripts/generate-db-types.mjs"
   },
   "dependencies": {
     "next": "16.3.5",
@@ -28,18 +34,22 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^24",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "jsdom": "^30.1.0",
+    "pg": "^8.23.0",
     "prettier": "^3",
+    "supabase": "^2.117.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5"
