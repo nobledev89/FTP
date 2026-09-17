@@ -11,3 +11,4 @@ superseded; do not rewrite history.
 | [0003](0003-provider-isolation.md)             | Provider adapters are isolated from publishing    | Accepted |
 | [0004](0004-public-admin-layout-separation.md) | Separate root layouts for public and admin        | Accepted |
 | [0005](0005-project-local-node-runtime.md)     | Project-local Node 24 runtime via pnpm            | Accepted |
+| [0006](0006-admin-authentication-boundary.md)  | Where the admin authentication boundary lives     | Accepted |

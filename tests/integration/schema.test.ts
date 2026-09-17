@@ -55,7 +55,10 @@ describe("migrations", () => {
       order by r.role, p.proname
     `);
     expect(executable).toEqual([
+      { role: "authenticated", name: "admin_dashboard" },
       { role: "authenticated", name: "admin_transition_job" },
+      { role: "authenticated", name: "admin_update_site_identity" },
+      { role: "authenticated", name: "admin_update_site_settings" },
       { role: "authenticated", name: "create_article_job" },
     ]);
   });

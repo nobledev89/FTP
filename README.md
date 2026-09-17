@@ -42,6 +42,19 @@ Open <http://localhost:3000>. Design review fixtures are at `/design-review` and
 (outside Vercel production). Supabase setup, the access model, and hosted-project steps are in
 [docs/SUPABASE.md](docs/SUPABASE.md).
 
+The admin console is at `/admin` and needs an account with an active `admin_users` row. To create
+one against the local stack:
+
+```powershell
+# 1. Add the user in Supabase Studio (http://127.0.0.1:54323) -> Authentication -> Add user,
+#    with "Auto Confirm User" enabled.
+# 2. Grant it ownership once, from Studio -> SQL Editor:
+#    select private.bootstrap_first_owner('you@example.com');
+```
+
+Then sign in at <http://localhost:3000/admin/login>. See
+[docs/ADMIN-CONSOLE.md](docs/ADMIN-CONSOLE.md) for what each screen does.
+
 ## Scripts
 
 | Command                             | What it does                                                          |
@@ -52,7 +65,8 @@ Open <http://localhost:3000>. Design review fixtures are at `/design-review` and
 | `pnpm typecheck`                    | Generate route types, then type-check web, worker, and tests          |
 | `pnpm test`                         | Unit tests (web and worker Vitest projects)                           |
 | `pnpm test:integration`             | Schema, RLS, queue, state machine, and Storage tests (local Supabase) |
-| `pnpm test:e2e`                     | Production build plus Playwright design-review checks                 |
+| `pnpm test:e2e`                     | Production build plus Playwright design and signed-out admin checks   |
+| `pnpm test:e2e:admin`               | Authenticated admin console checks (needs the local Supabase stack)   |
 | `pnpm supabase:start` / `:stop`     | Start or stop the local Supabase stack                                |
 | `pnpm supabase:reset`               | Rebuild the local database from migrations and seed data              |
 | `pnpm db:lint`                      | `plpgsql_check` over database functions                               |
@@ -67,6 +81,7 @@ Worker scripts (`worker:once`, `worker:start`, `worker:status`) arrive in Phase 
 - [Decision records](docs/decisions/README.md)
 - [Design system](docs/DESIGN-SYSTEM.md)
 - [Supabase](docs/SUPABASE.md)
+- [Admin console](docs/ADMIN-CONSOLE.md)
 - [State machine](docs/STATE-MACHINE.md)
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)

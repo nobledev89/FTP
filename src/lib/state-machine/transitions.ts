@@ -205,6 +205,14 @@ export function stageForStatus(status: JobStatus): PipelineStage | null {
   return null;
 }
 
+/**
+ * Pipeline order, 1-based. Mirrors `private.stage_rank`, which the database uses to stop an
+ * escalation resolving to a stage further ahead than where it stopped.
+ */
+export function stageRank(stage: PipelineStage): number {
+  return PIPELINE_STAGES.indexOf(stage) + 1;
+}
+
 export function pendingStatusForStage(
   stage: PipelineStage,
   revisionCount: number,

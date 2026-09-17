@@ -1455,6 +1455,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_dashboard: { Args: { p_list_limit?: number }; Returns: Json }
       admin_transition_job: {
         Args: {
           p_action: string
@@ -1468,6 +1469,29 @@ export type Database = {
           lock_version: number
           status: Database["public"]["Enums"]["job_status"]
         }[]
+      }
+      admin_update_site_identity: {
+        Args: {
+          p_description: string
+          p_disclosure: string
+          p_name: string
+          p_timezone: string
+        }
+        Returns: Json
+      }
+      admin_update_site_settings: {
+        Args: {
+          p_auto_publish_default: boolean
+          p_default_byline_name: string
+          p_default_byline_role: string
+          p_editorial_contact_email: string
+          p_seo_default_description: string
+          p_seo_default_title: string
+          p_share_image_path: string
+          p_worker_offline_after_seconds: number
+          p_worker_stale_after_seconds: number
+        }
+        Returns: Json
       }
       claim_next_job: {
         Args: {

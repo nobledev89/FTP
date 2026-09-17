@@ -36,6 +36,7 @@ Migrations run in order:
 | `20260917100400_rls_and_grants.sql`          | RLS on every table, explicit grants, policies                                                                                                                      |
 | `20260917100500_storage.sql`                 | `article-work` and `article-public` buckets and policies                                                                                                           |
 | `20260917100600_indexes.sql`                 | Queue, lease, dashboard, public list, and timeline indexes                                                                                                         |
+| `20260918100000_admin_console.sql`           | Admin membership helpers, `admin_dashboard`, `admin_update_site_settings`, `admin_update_site_identity`                                                            |
 
 Design rules enforced by the database:
 
@@ -56,13 +57,14 @@ Design rules enforced by the database:
 
 ## Access matrix
 
-| Role                            | Tables                                                                    | Functions                                    |
-| ------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------- |
-| `anon`                          | Read `sites`; read `articles` and slug aliases that are published and due | None                                         |
-| `authenticated` (no membership) | Same as `anon`                                                            | Admin functions reject with `42501`          |
-| Admin `viewer`                  | Read every editorial table and all articles                               | Admin functions reject with `42501`          |
-| Admin `editor`/`owner`          | Same reads as viewer; no direct writes                                    | `create_article_job`, `admin_transition_job` |
-| `service_role` (worker)         | Full table access, still subject to the state machine and history guards  | Worker functions below                       |
+| Role                            | Tables                                                                    | Functions                                                                       |
+| ------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `anon`                          | Read `sites`; read `articles` and slug aliases that are published and due | None                                                                            |
+| `authenticated` (no membership) | Same as `anon`                                                            | Admin functions reject with `42501`                                             |
+| Admin `viewer`                  | Read every editorial table and all articles                               | `admin_dashboard`; writes reject with `42501`                                   |
+| Admin `editor`                  | Same reads as viewer; no direct writes                                    | Adds `create_article_job`, `admin_transition_job`, `admin_update_site_settings` |
+| Admin `owner`                   | Same reads as editor; no direct writes                                    | Adds `admin_update_site_identity`                                               |
+| `service_role` (worker)         | Full table access, still subject to the state machine and history guards  | Worker functions below                                                          |
 
 `private.bootstrap_first_owner` cannot be executed by any API role.
 
@@ -99,6 +101,21 @@ modes are rejected unless confirmed there.
 
 Every admin action checks `expected_lock_version` and appends a `job_events` row.
 
+`admin_dashboard(list_limit)` returns one `jsonb` summary for the caller's site: status and stage
+counts, totals, and bounded lists of the jobs awaiting input, blocked, in progress, upcoming, and
+recently published, plus worker heartbeats classified against the configured thresholds. Any active
+membership may call it. `list_limit` is clamped to 1-50.
+
+`admin_update_site_settings(...)` (editor or owner) replaces every editable column of
+`site_settings` and records `updated_by`. Every value is passed on each call, so an empty string
+clears an optional column. Table constraints still apply: the email format, the threshold ranges,
+and `worker_offline_after_seconds > worker_stale_after_seconds`.
+
+`admin_update_site_identity(name, description, disclosure, timezone)` (owner only) updates `sites`.
+It deliberately does not expose `canonical_origin`, `locale`, or `currency`: the canonical origin is
+baked into the canonical URL of every published article, so it is a migration decision, not a
+setting. An unknown timezone is rejected with `22023`.
+
 ## Error codes
 
 | SQLSTATE | Meaning                                               | Typical handling                          |
@@ -131,6 +148,9 @@ list objects.
 - Admin access comes only from an active `admin_users` row. A signed-in user without a membership
   sees exactly what an anonymous visitor sees.
 - Removing an auth user removes their membership; `job_events` keep the user id as history.
+- The web app verifies the session with `getClaims()`, which checks the access token's signature,
+  rather than trusting the cookie's contents. See
+  [decisions/0006-admin-authentication-boundary.md](decisions/0006-admin-authentication-boundary.md).
 
 ## Hosted project setup
 
@@ -155,8 +175,9 @@ list objects.
    select private.bootstrap_first_owner('owner@example.com');
    ```
 
-   The function refuses to run if an active owner already exists. Add further admins from the admin
-   application (Phase 4).
+   The function refuses to run if an active owner already exists. Further memberships are added the
+   same way for now, with an `insert into public.admin_users` from the SQL editor; managing them from
+   the console is not part of version 1.
 
 7. Copy the **publishable** key to Vercel. Copy the **secret** (service role) key only into
    `local-worker/.env.local` on the worker PC. Never add it to Vercel.

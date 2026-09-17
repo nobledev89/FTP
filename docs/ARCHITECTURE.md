@@ -78,6 +78,23 @@ never appear in `NEXT_PUBLIC_*` variables, browser bundles, prompts, logs, or da
 The full status list and transition rules are in the plan, section 8, and the executable application
 contract is documented in [STATE-MACHINE.md](STATE-MACHINE.md).
 
+## Admin authentication and authorization
+
+Four layers, each independent of the others
+([ADR 0006](decisions/0006-admin-authentication-boundary.md)):
+
+| Layer                         | Responsibility                                                              |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `src/proxy.ts`                | Refresh the session cookie; optimistic redirect of signed-out visitors      |
+| `src/lib/auth/dal.ts`         | The only place that establishes identity and membership                     |
+| Row Level Security            | Narrow what `authenticated` can select at all                               |
+| `SECURITY DEFINER` admin RPCs | Re-derive the caller's membership; the only way the console writes anything |
+
+`proxy.ts` is Next.js 16's renamed Middleware convention and runs on the Node.js runtime. It makes no
+authorization decision: membership is never read there. No admin layout performs an auth check
+either, because a layout does not control whether nested segments render. Each page calls
+`requireAdminSession()`, and each Server Action calls `authorizeAdminAction()`.
+
 ## Rendering boundaries
 
 - Public and admin routes live in separate route groups with separate root layouts, fonts, and

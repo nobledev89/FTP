@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
-export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
+import type { StatusTone } from "@/lib/admin/status-display";
+
+export type { StatusTone };
 
 const toneClass: Record<StatusTone, string> = {
   success: "bg-success-bg text-success border-success/25",

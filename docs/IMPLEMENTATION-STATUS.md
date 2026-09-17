@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 3 — Domain services and state machine (`COMPLETE`)           |
-| Current task           | Phase 4 ready: authentication and authenticated admin shell        |
-| Last updated           | 2026-09-17 21:18, Asia/Singapore                                  |
+| Current phase          | Phase 4 — Authentication and admin shell (`COMPLETE`)              |
+| Current task           | Phase 5 ready: local worker package, CLI, and queue safety         |
+| Last updated           | 2026-09-18 00:20, Asia/Singapore                                  |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `f2237c2` first slice; Phase 3 is included in this session's commit |
-| Active blockers        | Owner design sign-off (Phase 1) remains pending; it does not block non-visual Phase 3 work. |
-| Next action            | Begin Phase 4 with Supabase SSR auth clients, session refresh, and protected admin authorization. |
+| Relevant commit        | `f702fba` Phase 3; Phase 4 is included in this session's commit    |
+| Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. |
+| Next action            | Begin Phase 5 with the Windows-compatible worker package, `worker:once`/`worker:start`/`worker:status`, and lease safety. |
 
 ## Status legend
 
@@ -31,7 +31,7 @@ This is the authoritative live record of implementation progress. Update it imme
 |     1 | Paperframe design lock                             | `IN_PROGRESS` |      90% | —         | Implemented; 29 unit tests and 40 Playwright checks pass at 375/768/1024/1440px; agent visual review done; production build 404s fixture routes. Owner design sign-off pending. |
 |     2 | Supabase schema and security                       | `COMPLETE`    |     100% | 2026-09-17 | Fresh `supabase db reset` applies 7 migrations and seed; `db:lint` clean; 90 integration tests pass twice in a row (schema/grants, RLS matrix, queue concurrency and leases, state machine and publication boundary, Storage). Local only; GitHub CI job added but not run. |
 |     3 | Domain services and state machine                  | `COMPLETE`    |     100% | 2026-09-17 | 163 unit tests and 93 integration tests pass; transition map is in exact database parity; format, lint, typecheck, and production build pass. |
-|     4 | Authentication and admin shell                     | `NOT_STARTED` |       0% | —         | —                |
+|     4 | Authentication and admin shell                     | `COMPLETE`    |     100% | 2026-09-18 | 240 unit tests, 112 integration tests, 57 signed-out Playwright checks, and 10 authenticated Playwright checks pass; format, lint, typecheck, and production build pass. |
 |     5 | Local worker and queue safety                      | `NOT_STARTED` |       0% | —         | —                |
 |     6 | Mock pipeline end to end                           | `NOT_STARTED` |       0% | —         | —                |
 |     7 | Public publication                                 | `NOT_STARTED` |       0% | —         | —                |
@@ -65,13 +65,66 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Add migration and RLS integration tests against local Supabase.
 - [x] Verify a fresh reset applies all migrations and anonymous/admin/worker access tests pass.
 
-### Phase 3 — Domain services and state machine (active)
+### Phase 4 — Authentication and admin shell (complete; kept for review)
+
+- [x] Build Supabase SSR auth clients, login/logout, protected routing, admin authorization, and session refresh.
+- [x] Build admin navigation, responsive shell, accessible components, loading/error/empty states.
+- [x] Add Dashboard, New Article, Article Detail, Prompts, Providers, Logs, and Settings routes with real database reads.
+- [x] Implement validated server actions for create/pause/resume/retry/approve/schedule/settings.
+- [x] Add the database functions the console needs (`admin_dashboard`, `admin_update_site_settings`, `admin_update_site_identity`).
+- [x] Verify the exit criterion in a browser: an authenticated admin creates and inspects an `IDEA`; unauthenticated and non-admin users reach neither data nor actions.
+
+### Phase 3 — Domain services and state machine (complete; kept for review)
 
 - [x] Implement Zod schemas and repository/service boundaries.
 - [x] Implement the pure TypeScript transition map, with a parity test against `private.job_transitions`.
 - [x] Implement event append, artifact version helpers, optimistic concurrency, and pause/resume/retry/human-resolution clients over the Phase 2 functions.
 - [x] Add table-driven tests for every allowed and rejected transition.
 - [x] Write `docs/STATE-MACHINE.md`.
+
+- **Decision: the authentication boundary is four independent layers, and a layout is not one of them.**
+  `src/proxy.ts` (Next.js 16's renamed Middleware) refreshes the session and optimistically redirects
+  signed-out visitors; `src/lib/auth/dal.ts` is the only place that establishes identity and
+  membership; RLS narrows what `authenticated` can select; and the admin RPCs re-derive the caller's
+  membership. Every page calls the DAL itself, because a layout does not control whether nested
+  segments render. See ADR 0006.
+- **Decision: `getClaims()`, not the cookie's contents.** Identity comes from a signature-verified
+  access token. The session cookie is client-held storage and is never trusted as a source of truth.
+- **Decision: a signed-in non-admin sees `/admin/no-access`, not a login form.** They have already
+  authenticated; bouncing them back to sign in would be misleading. `unauthorized()`/`forbidden()`
+  would give 401/403 but need the experimental `authInterrupts` flag, and the admin is already
+  `noindex`, so the status code buys nothing here.
+- **Decision: the proxy matcher covers `/admin` only.** Public pages stay cacheable and are never
+  delayed by session work. Server Actions post to the route that renders them, so admin actions are
+  still covered; each one re-authorizes regardless.
+- **Decision: "approve" is a resolution, not a separate action.** There is no `AUDIT_PASSED` to
+  `APPROVED` admin transition: `AUDITING` to `APPROVED` is the worker's normal path. An admin approves
+  by resolving a `NEEDS_HUMAN` job to `APPROVED`, which the database allows only after an audit and
+  only when the latest valid draft carries the latest audit.
+- **Decision: the console aggregates in the database, not the browser's session.** `admin_dashboard`
+  returns one authorized `jsonb` summary instead of a dozen count queries. Every other read is a plain
+  RLS-filtered select with explicit columns, server-side filters, and `range` pagination.
+- **Decision: site identity is owner-only and narrower than the table.** `admin_update_site_identity`
+  exposes name, description, disclosure, and timezone. `canonical_origin` is stored in the canonical
+  URL of every published article, so it is a migration decision; `locale` and `currency` are
+  deployment-level too.
+- **Decision: worker-originated text is redacted before it reaches a browser.** Credentials, tokens,
+  local Windows paths, and email addresses are masked and long output truncated in provider errors,
+  failure summaries, publishing errors, event notes, and JSON summaries. The unredacted text stays in
+  the database.
+- **Decision: `datetime-local` values are converted explicitly.** A scheduling input carries no
+  offset, so `zonedLocalToUtcIso` resolves it against the publication timezone. Ambiguous autumn times
+  take the earlier occurrence and non-existent spring times move forward, matching Temporal's
+  "compatible" disambiguation.
+- **Decision: the authenticated end-to-end suite is separate.** `pnpm test:e2e` runs with placeholder
+  Supabase values and covers the signed-out paths with no database. `pnpm test:e2e:admin` builds
+  against the local stack and drives the real console; CI runs it in the database job, which already
+  has Supabase up.
+- **Deferred to later phases, with reasons.** `/admin/articles/[jobId]/edit` needs `admin_edit` draft
+  writes, which arrive with the mock pipeline (Phase 6). Prompt activation and rollback arrive with
+  Phase 6, which seeds the templates. Provider-mode changes arrive with the adapters that make the
+  alternatives real (Phases 8-10); a new job can already override a mode for its own run. Membership
+  management stays a SQL-editor task in version 1.
 
 ## Blockers and decisions
 
@@ -92,6 +145,27 @@ This is the authoritative live record of implementation progress. Update it imme
 - **Decision: explicit function grants only.** PostgreSQL ignores per-schema default-privilege revokes of the global `PUBLIC EXECUTE` default, so the foundation migration revokes it globally. The grants migration then grants API roles only the functions they need. A schema test found and now guards this.
 
 ## Completion log
+
+### 2026-09-18 - Phase 4 authentication and admin shell complete
+
+Date/time: 2026-09-18 00:20, Asia/Singapore
+
+Phase/task: Phase 4 - Supabase SSR authentication, the authorization boundary, and the admin console
+
+Status change: Phase 4 `NOT_STARTED` to `IN_PROGRESS` to `COMPLETE`. Current task moves to Phase 5. Phase 1 owner design sign-off remains separately pending.
+
+What changed: Added the Phase 4 migration `20260918100000_admin_console.sql`: `private.require_admin` and `private.require_owner`, `public.admin_dashboard` (one authorized `jsonb` summary of status and stage counts, totals, and bounded lists of awaiting-input, blocked, in-progress, upcoming, and recently published jobs, plus worker heartbeats classified against the configured thresholds), `public.admin_update_site_settings` (editor or owner), and `public.admin_update_site_identity` (owner only), with grants to `authenticated`. Added the Supabase SSR layer: a lazily parsed browser-safe environment contract that rejects a service-role secret, a request-scoped server client, and a proxy client that writes rotated tokens and their no-store headers onto the returned response. Added `src/proxy.ts` (Next.js 16's renamed Middleware convention) matching `/admin` only, which refreshes the session, optimistically redirects signed-out visitors, and forwards the requested path as a header. Added the Data Access Layer (`getVerifiedUser` via `getClaims()`, `getAdminSession`, `requireAdminSession`, `authorizeAdminAction`), the `next` destination normalizer, and sign-in/sign-out actions with one message for every rejected attempt. Added the admin console: dashboard with a queue summary and a filtered, paginated queue; new article with per-stage provider modes and billable-mode warnings; article detail with every artifact version, sources, provider runs, publishing logs, the paginated timeline, and the workflow controls; prompts, providers, logs, and settings; plus segment loading and error states, a no-access page, and shell identity with sign-out. Added server actions for create, start, pause, resume, retry, escalate, resolve (including approval), schedule, settings, and identity, each authorizing before validating and carrying `lock_version`. Added redaction of worker-originated text, server-side pagination and filter parsing, the exhaustive status vocabulary, admin formatting, and timezone-correct `datetime-local` conversion. Moved `@supabase/supabase-js` to runtime dependencies and added `@supabase/ssr` and `server-only`. Wrote `docs/ADMIN-CONSOLE.md` and ADR 0006, and updated the architecture, Supabase, and README documentation.
+
+Files/migrations affected: `supabase/migrations/20260918100000_admin_console.sql`; `src/proxy.ts`; `src/lib/supabase/{env,server,proxy-session,database.types}.ts`; `src/lib/auth/**`; `src/lib/admin/**`; `src/lib/format/timezone.ts`; `src/lib/state-machine/transitions.ts` (added `stageRank`); `src/app/(admin)/admin/**`; `src/components/admin/**`; `tests/e2e/{admin-auth,admin-session}.spec.ts`; `tests/integration/{admin-console.test.ts,schema.test.ts}`; `scripts/{run-e2e,run-e2e-admin}.mjs`; `.github/workflows/ci.yml`; `docs/{ADMIN-CONSOLE,ARCHITECTURE,SUPABASE}.md`; `docs/decisions/{0006-admin-authentication-boundary.md,README.md}`; `README.md`; `package.json`; `pnpm-lock.yaml`; `local-worker/src/db/database.types.ts`.
+
+Verification performed: `pnpm supabase:reset` applied all eight migrations and seed from scratch; `pnpm db:lint` clean; `pnpm db:types` regenerated for web and worker. `pnpm format:check`, `pnpm lint`, and `pnpm typecheck` pass. `pnpm test` passes 240 unit tests in 19 files (up from 163), covering destination normalization against absolute, protocol-relative, encoded, control-character, and fragment inputs; pagination and page links; redaction of Supabase and provider keys, JWTs, bearer headers, URL credentials, Windows and POSIX paths, and email addresses; queue filter parsing and stage intersection; control availability cross-checked against the Phase 3 planner for all 22 statuses; resolution destinations against the database's skip-ahead, approval, and revision-cycle rules; timezone conversion across both daylight-saving edges with a round trip; and the environment contract. `pnpm test:integration` passes 112 tests in 7 files (up from 93), including that `admin_dashboard` refuses anonymous, non-admin, and deactivated callers, that its counts and lists follow a job through creation and escalation, that worker health tracks the configured thresholds, that an editor creates and reads back an `IDEA` while a viewer and a non-admin cannot, that anonymous and non-admin sessions see no editorial row, that a stale `lock_version` is rejected, and that the settings and identity functions enforce their roles, clear optional values, and keep the table constraints. `pnpm build` completes the Next.js 16.3.5 production build with the proxy registered. `pnpm test:e2e` passes 57 checks including every admin route redirecting when signed out, destination preservation, hostile `next` values being discarded, no queue data in the redirect response, the login form's labels and autocomplete, `noindex`, no public chrome, and the 375px layout. `pnpm test:e2e:admin` passes 10 checks against the local stack: signing in to a deep link, a rejected password showing one generic message, creating an `IDEA` and inspecting it, start/pause/resume with the expected `lock_version`, a raced second admin producing the stale-version message, saving settings, signing out and being locked out again, a signed-in non-admin reaching only `/admin/no-access`, and every screen rendering at 375px and 1440px without horizontal overflow. Screenshots are in `test-results/admin-review/`. Findings fixed during verification: a `"use server"` module exporting a constant broke the production build (that state now lives in separate modules); two form fields both labelled "Images"; a redaction rule that left a bearer token behind; ambiguous autumn times resolving to the later occurrence; and an end-to-end cleanup that silently failed against append-only history.
+
+Result: Passed. The Phase 4 exit criterion is met, in the database and in a browser.
+
+Commit/PR: Included in this session's Phase 4 commit on `main`.
+
+Next action: Start Phase 5 with the Windows-compatible worker package and CLI, atomic claim and lease renewal, expiry recovery, heartbeat, retry and backoff, graceful shutdown, and structured redacted logging.
+
 
 ### 2026-09-17 — Phase 3 domain services and state machine complete
 
