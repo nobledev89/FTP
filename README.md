@@ -23,6 +23,7 @@ Implementation progress, verification evidence, blockers, and the next action ar
 
 - pnpm `10.32.1` or later
 - Docker Desktop (for the local Supabase stack, from Phase 2)
+- Playwright Chromium for `pnpm test:e2e`: `pnpm exec playwright install chromium`
 - Git with access to `git@github.com:nobledev89/FTP.git`
 
 You do not need to install Node 24. pnpm downloads the pinned runtime (`24.21.0`) automatically; see
@@ -36,7 +37,8 @@ Copy-Item .env.example .env.local   # then fill in values
 pnpm dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>. Design review fixtures are at `/design-review` and `/admin/design-review`
+(outside Vercel production).
 
 ## Scripts
 

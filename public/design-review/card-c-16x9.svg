@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Abstract line chart rising across the frame">
+  <rect width="1600" height="900" fill="#d6d3d1"/>
+  <path d="M0 700 L260 640 L480 690 L720 520 L940 560 L1180 360 L1400 400 L1600 220 L1600 900 L0 900Z" fill="#a8a29e"/>
+  <path d="M0 700 L260 640 L480 690 L720 520 L940 560 L1180 360 L1400 400 L1600 220" fill="none" stroke="#1c1917" stroke-width="14" stroke-linejoin="round"/>
+  <circle cx="1180" cy="360" r="22" fill="#1c1917"/>
+</svg>

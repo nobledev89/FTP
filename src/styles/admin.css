@@ -1,0 +1,73 @@
+/*
+ * Admin application stylesheet. Rules: docs/DESIGN-SYSTEM.md section 10.
+ * Shares nothing with the public publication; only admin sources are scanned.
+ */
+@import "tailwindcss" source(none);
+
+@source "../app/(admin)";
+@source "../components/admin";
+
+@theme {
+  --color-*: initial;
+  --font-serif: initial;
+
+  --color-canvas: #fafafa;
+  --color-panel: #ffffff;
+  --color-border: #e4e4e7;
+  --color-border-strong: #71717a;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-text-subtle: #71717a;
+  --color-accent: #1d4ed8;
+  --color-accent-hover: #1e40af;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+
+  --color-success: #166534;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #92400e;
+  --color-warning-bg: #fffbeb;
+  --color-danger: #991b1b;
+  --color-danger-bg: #fef2f2;
+  --color-info: #1e40af;
+  --color-info-bg: #eff6ff;
+  --color-neutral: #3f3f46;
+  --color-neutral-bg: #f4f4f5;
+
+  --radius-control: 4px;
+  --radius-panel: 6px;
+}
+
+@theme inline {
+  --font-sans: var(--font-admin-sans), system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: var(--font-admin-mono), ui-monospace, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    font-size: 100%;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 1ms !important;
+      animation-duration: 1ms !important;
+    }
+  }
+}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Abstract building columns under a dark sky">
+  <rect width="1600" height="900" fill="#292524"/>
+  <rect y="640" width="1600" height="260" fill="#44403c"/>
+  <polygon points="360,300 800,120 1240,300" fill="#d6d3d1"/>
+  <rect x="380" y="300" width="840" height="36" fill="#a8a29e"/>
+  <g fill="#e7e5e4">
+    <rect x="430" y="350" width="70" height="290"/>
+    <rect x="590" y="350" width="70" height="290"/>
+    <rect x="750" y="350" width="70" height="290"/>
+    <rect x="910" y="350" width="70" height="290"/>
+    <rect x="1070" y="350" width="70" height="290"/>
+  </g>
+  <rect x="340" y="640" width="920" height="40" fill="#a8a29e"/>
+</svg>

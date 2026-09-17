@@ -9,3 +9,6 @@ supabase/.temp
 src/lib/supabase/database.types.ts
 docs/IMPLEMENTATION-PLAN.md
 docs/IMPLEMENTATION-STATUS.md
+playwright-report
+test-results
+.reference
