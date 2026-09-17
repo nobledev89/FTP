@@ -9,11 +9,11 @@ This is the authoritative live record of implementation progress. Update it imme
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | First slice (Phases 0–2) implemented; awaiting owner review before Phase 3 |
 | Current task           | Owner review: design fixtures (Phase 1 exit) and schema/security contracts (plan section 25) |
-| Last updated           | 2026-09-17 19:24, Asia/Singapore                                  |
-| Branch                 | `main` (local; not yet pushed to `origin`)                        |
-| Relevant commit        | `a86d8d4` Phase 0; `9aa044e` Phase 1; Phase 2 commit hash recorded in the next log entry |
-| Active blockers        | Owner design sign-off (Phase 1). Owner acceptance of the Phase 0–2 contracts before Phase 3 (plan section 25). Push to GitHub needs owner confirmation; GitHub CI has not run. |
-| Next action            | Owner reviews `/design-review` pages and `docs/SUPABASE.md`, then confirms the push to `origin` |
+| Last updated           | 2026-09-17 19:32, Asia/Singapore                                  |
+| Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
+| Relevant commit        | `a86d8d4` Phase 0; `9aa044e` Phase 1; `4668ee3` Phase 2 (pushed; CI green) |
+| Active blockers        | Owner design sign-off (Phase 1). Owner acceptance of the Phase 0–2 contracts before Phase 3 (plan section 25). |
+| Next action            | Owner reviews `/design-review` pages and `docs/SUPABASE.md`, then approves starting Phase 3 |
 
 ## Status legend
 
@@ -75,7 +75,7 @@ This is the authoritative live record of implementation progress. Update it imme
 
 ## Blockers and decisions
 
-- **Push to GitHub pending owner confirmation.** `origin` is configured and SSH authentication to GitHub works, but nothing has been pushed yet. The first push publishes the repository contents.
+- **Resolved: push to GitHub.** The owner confirmed on 2026-09-17; `main` was pushed to `origin` and the first CI run passed (see the completion log).
 - **Decision: project-local Node 24.** The PC has Node 20.15.1 (not the 20.19.4 in the plan snapshot), and Node 20 is end-of-life. pnpm `useNodeVersion: 24.21.0` runs every script on Node 24 without changing the system Node. See `docs/decisions/0005-project-local-node-runtime.md`.
 - **Decision: ESLint 9 and TypeScript 5.9.** Kept at the versions `create-next-app@16.3.5` pairs with `eslint-config-next`; ESLint 10 and TypeScript 7 are not yet supported by that config or by `typescript-eslint`.
 - **Decision: `(public)` and `(admin)` route groups.** The admin lives at `src/app/(admin)/admin/**`, not `src/app/admin/**`, so each group has its own root layout (ADR 0004). URLs are unchanged.
@@ -92,6 +92,18 @@ This is the authoritative live record of implementation progress. Update it imme
 - **Decision: explicit function grants only.** PostgreSQL ignores per-schema default-privilege revokes of the global `PUBLIC EXECUTE` default, so the foundation migration revokes it globally. The grants migration then grants API roles only the functions they need. A schema test found and now guards this.
 
 ## Completion log
+
+### 2026-09-17 — First slice pushed; GitHub CI passes
+
+Date/time: 2026-09-17 19:32, Asia/Singapore  
+Phase/task: Phases 0–2 — publish to the canonical repository and run CI  
+Status change: The push blocker is resolved. The GitHub CI evidence gap for Phases 0 and 2 is closed. Phase 1 stays `IN_PROGRESS` pending owner design sign-off.  
+What changed: After owner confirmation, pushed `main` (`a86d8d4`, `9aa044e`, `4668ee3`) to the empty repository `git@github.com:nobledev89/FTP.git` and set upstream tracking. The working tree was clean before the push, and `git ls-remote` confirmed `refs/heads/main` at `4668ee3`.  
+Files/migrations affected: `docs/IMPLEMENTATION-STATUS.md` (this entry); no code or migrations.  
+Verification performed: GitHub Actions run 35215838618 on `4668ee3` completed with all three jobs `success`: "Lint, typecheck, test, build" (frozen install, format check, lint, typecheck, unit tests, build); "Design review (Playwright)" (production build plus 40 checks on Ubuntu); and "Supabase schema, RLS, and queue" (local stack start, `db:lint`, generated types current, 90 integration tests). This is the first clean-environment confirmation of the local results.  
+Result: Passed.  
+Commit/PR: Pushed `4668ee3`; this status update is committed separately.  
+Next action: Owner reviews the design fixtures and the Phase 0–2 contracts, then approves Phase 3.
 
 ### 2026-09-17 — Phase 2 Supabase schema and security complete
 
