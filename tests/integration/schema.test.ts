@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 
+import { JOB_TRANSITIONS } from "@/lib/state-machine/transitions";
+
 import { closeDb, db, serviceClient } from "./helpers/clients";
 
 afterAll(closeDb);
@@ -173,6 +175,29 @@ describe("migrations", () => {
     ]);
     expect(has("APPROVED", "PUBLISHED")).toBe(false);
     expect(has("PUBLISHED", "FAILED")).toBe(false);
+  });
+
+  it("stays in exact parity with the pure TypeScript transition map", async () => {
+    const databaseTransitions = await rows<{
+      from_status: string;
+      to_status: string;
+      path: string;
+    }>(`
+      select from_status::text, to_status::text, path
+      from private.job_transitions
+      order by from_status::text, to_status::text
+    `);
+    const applicationTransitions = JOB_TRANSITIONS.map(({ from, to, path }) => ({
+      from_status: from,
+      to_status: to,
+      path,
+    })).sort((left, right) =>
+      `${left.from_status}>${left.to_status}`.localeCompare(
+        `${right.from_status}>${right.to_status}`,
+      ),
+    );
+
+    expect(databaseTransitions).toEqual(applicationTransitions);
   });
 
   it("seeds the UK publication and non-billable provider defaults", async () => {

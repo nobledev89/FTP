@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | First slice (Phases 0–2) implemented; awaiting owner review before Phase 3 |
-| Current task           | Owner review: design fixtures (Phase 1 exit) and schema/security contracts (plan section 25) |
-| Last updated           | 2026-09-17 19:32, Asia/Singapore                                  |
+| Current phase          | Phase 3 — Domain services and state machine (`COMPLETE`)           |
+| Current task           | Phase 4 ready: authentication and authenticated admin shell        |
+| Last updated           | 2026-09-17 21:18, Asia/Singapore                                  |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `a86d8d4` Phase 0; `9aa044e` Phase 1; `4668ee3` Phase 2 (pushed; CI green) |
-| Active blockers        | Owner design sign-off (Phase 1). Owner acceptance of the Phase 0–2 contracts before Phase 3 (plan section 25). |
-| Next action            | Owner reviews `/design-review` pages and `docs/SUPABASE.md`, then approves starting Phase 3 |
+| Relevant commit        | `f2237c2` first slice; Phase 3 is included in this session's commit |
+| Active blockers        | Owner design sign-off (Phase 1) remains pending; it does not block non-visual Phase 3 work. |
+| Next action            | Begin Phase 4 with Supabase SSR auth clients, session refresh, and protected admin authorization. |
 
 ## Status legend
 
@@ -30,7 +30,7 @@ This is the authoritative live record of implementation progress. Update it imme
 |     0 | Repository and architecture baseline               | `COMPLETE`    |     100% | 2026-09-17 | Local gate passed: frozen install, format, lint, typecheck, 4 unit tests, build. GitHub CI not yet run (not pushed). Commit `a86d8d4`. |
 |     1 | Paperframe design lock                             | `IN_PROGRESS` |      90% | —         | Implemented; 29 unit tests and 40 Playwright checks pass at 375/768/1024/1440px; agent visual review done; production build 404s fixture routes. Owner design sign-off pending. |
 |     2 | Supabase schema and security                       | `COMPLETE`    |     100% | 2026-09-17 | Fresh `supabase db reset` applies 7 migrations and seed; `db:lint` clean; 90 integration tests pass twice in a row (schema/grants, RLS matrix, queue concurrency and leases, state machine and publication boundary, Storage). Local only; GitHub CI job added but not run. |
-|     3 | Domain services and state machine                  | `NOT_STARTED` |       0% | —         | —                |
+|     3 | Domain services and state machine                  | `COMPLETE`    |     100% | 2026-09-17 | 163 unit tests and 93 integration tests pass; transition map is in exact database parity; format, lint, typecheck, and production build pass. |
 |     4 | Authentication and admin shell                     | `NOT_STARTED` |       0% | —         | —                |
 |     5 | Local worker and queue safety                      | `NOT_STARTED` |       0% | —         | —                |
 |     6 | Mock pipeline end to end                           | `NOT_STARTED` |       0% | —         | —                |
@@ -65,13 +65,13 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Add migration and RLS integration tests against local Supabase.
 - [x] Verify a fresh reset applies all migrations and anonymous/admin/worker access tests pass.
 
-### Phase 3 — Domain services and state machine (next, after owner review)
+### Phase 3 — Domain services and state machine (active)
 
-- [ ] Implement Zod schemas and repository/service boundaries.
-- [ ] Implement the pure TypeScript transition map, with a parity test against `private.job_transitions`.
-- [ ] Implement event append, artifact version helpers, optimistic concurrency, and pause/resume/retry/human-resolution clients over the Phase 2 functions.
-- [ ] Add table-driven tests for every allowed and rejected transition.
-- [ ] Write `docs/STATE-MACHINE.md`.
+- [x] Implement Zod schemas and repository/service boundaries.
+- [x] Implement the pure TypeScript transition map, with a parity test against `private.job_transitions`.
+- [x] Implement event append, artifact version helpers, optimistic concurrency, and pause/resume/retry/human-resolution clients over the Phase 2 functions.
+- [x] Add table-driven tests for every allowed and rejected transition.
+- [x] Write `docs/STATE-MACHINE.md`.
 
 ## Blockers and decisions
 
@@ -92,6 +92,26 @@ This is the authoritative live record of implementation progress. Update it imme
 - **Decision: explicit function grants only.** PostgreSQL ignores per-schema default-privilege revokes of the global `PUBLIC EXECUTE` default, so the foundation migration revokes it globally. The grants migration then grants API roles only the functions they need. A schema test found and now guards this.
 
 ## Completion log
+
+### 2026-09-17 — Phase 3 domain services and state machine complete
+
+Date/time: 2026-09-17 21:18, Asia/Singapore
+
+Phase/task: Phase 3 — typed domain contracts, state-machine parity, repositories, and clients
+
+Status change: Phase 3 `NOT_STARTED` → `IN_PROGRESS` → `COMPLETE`. The owner's instruction to continue accepted the completed Phase 0–2 contracts for this non-visual work; Phase 1 visual sign-off remains separately pending.
+
+What changed: Added strict Zod schemas for database job/event DTOs and normalized research, draft, audit, and image artifacts, including evidence-reference, image-role/readiness, and audit-finding cross-field rules. Added the pure TypeScript lifecycle model with all 22 statuses, seven stages, 99 allowed transition pairs, exceptional-path classification, stage/pending helpers, and deterministic admin planning for optimistic locking, pause normalization, retry, escalation, resolution, and scheduling. Added typed error normalization for database SQLSTATEs. Added separate authenticated-admin and service-role worker workflow clients over the Phase 2 RPCs. Added editorial-read and worker-write repository capabilities, validated event append restricted to non-transition events, and optimistic immutable artifact version allocation with concurrent unique-conflict handling. Added exhaustive transition tests, artifact/schema tests, real-client integration tests, and exact TypeScript/Postgres transition parity. Wrote `docs/STATE-MACHINE.md` and linked it from the architecture and README. Added Zod as a web runtime dependency.
+
+Files/migrations affected: `src/lib/state-machine/**`, `src/lib/validation/**`, `src/lib/content/**`, `tests/integration/domain-services.test.ts`, `tests/integration/schema.test.ts`, `docs/STATE-MACHINE.md`, `docs/ARCHITECTURE.md`, `README.md`, `package.json`, and `pnpm-lock.yaml`. No database migration changed.
+
+Verification performed: `pnpm format:check` passed; `pnpm lint` passed; `pnpm typecheck` passed for the Next.js and worker packages; `pnpm test` passed 163 tests in 11 files; `pnpm test:integration` passed 93 tests in 6 files against local Supabase; `pnpm build` completed the Next.js 16.3.5 production build; `git diff --check` passed. The unit matrix executes all 99 allowed and all 385 rejected status pairs. The integration parity assertion compares every row of `private.job_transitions`, and the existing artifact-immutability and publication-boundary tests remain green.
+
+Result: Passed. Phase 3 exit criteria are met.
+
+Commit/PR: Included in this session's Phase 3 commit on `main`; not yet pushed.
+
+Next action: Start Phase 4 with Supabase SSR clients, session refresh, protected admin authorization, and login/logout flows.
 
 ### 2026-09-17 — First slice pushed; GitHub CI passes
 

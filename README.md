@@ -67,6 +67,7 @@ Worker scripts (`worker:once`, `worker:start`, `worker:status`) arrive in Phase 
 - [Decision records](docs/decisions/README.md)
 - [Design system](docs/DESIGN-SYSTEM.md)
 - [Supabase](docs/SUPABASE.md)
+- [State machine](docs/STATE-MACHINE.md)
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)

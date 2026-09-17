@@ -75,8 +75,8 @@ never appear in `NEXT_PUBLIC_*` variables, browser bundles, prompts, logs, or da
 7. The verifier fetches the canonical URL and advances `PUBLISHED -> VERIFIED` only when every check
    passes.
 
-The full status list and transition rules are in the plan, section 8, and will be expanded in
-`docs/STATE-MACHINE.md` during Phase 3.
+The full status list and transition rules are in the plan, section 8, and the executable application
+contract is documented in [STATE-MACHINE.md](STATE-MACHINE.md).
 
 ## Rendering boundaries
 
