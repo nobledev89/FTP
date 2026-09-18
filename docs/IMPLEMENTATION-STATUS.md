@@ -9,11 +9,11 @@ This is the authoritative live record of implementation progress. Update it imme
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 9 — Subscription CLI providers (`COMPLETE`)         |
 | Current task           | Phase 10 ready: optional API adapters                                 |
-| Last updated           | 2026-09-18 14:07, Asia/Singapore                                  |
+| Last updated           | 2026-09-18 14:28, Asia/Singapore                                  |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `627ebd8` on `origin/main` (Phases 6–8 are `beeb4c7`; CI run 35307982789 passed). Phase 9 is verified in the working tree, uncommitted. |
+| Relevant commit        | `c84b67b` (Phase 9 subscription CLI providers), queued for the requested push to `origin/main`. |
 | Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
-| Next action            | Owner review, then commit and push Phase 9 so GitHub CI verifies it in a clean environment. |
+| Next action            | Confirm GitHub Actions for the Phase 9 push, then start Phase 10 optional API adapters. |
 
 ## Status legend
 
@@ -280,6 +280,33 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-18 — Phase 9 committed for GitHub CI
+
+Date/time: 2026-09-18 14:28, Asia/Singapore
+
+Phase/task: Phase 9 — owner-authorized commit and push
+
+Status change: No phase change; Phase 9 remains `COMPLETE`. The verified implementation moves from
+the working tree to `main` for clean-environment CI.
+
+What changed: Committed the complete Phase 9 implementation as `c84b67b`
+(`feat: add subscription CLI providers`). This status update follows that implementation commit in
+the same push.
+
+Files/migrations affected: `docs/IMPLEMENTATION-STATUS.md` only in this follow-up; the implementation
+files and migration are listed in the Phase 9 entry below.
+
+Verification performed before commit: `pnpm format:check`, `pnpm lint`, `pnpm typecheck`,
+`pnpm build`, 335 unit tests, and 129 integration tests passed. `git diff --check` was clean. The live
+Claude Code and Codex runs described below passed their production artifact schemas.
+
+Result: Passed locally; GitHub CI is the next verification boundary.
+
+Commit/PR: Phase 9 implementation commit `c84b67b`; the documentation commit containing this entry
+follows it on `main`.
+
+Next action: Confirm the GitHub Actions result for this push, then begin Phase 10.
 
 ### 2026-09-18 — Phase 9 subscription CLI providers complete
 
