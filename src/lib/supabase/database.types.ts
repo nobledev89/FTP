@@ -1525,6 +1525,7 @@ export type Database = {
       }
       admin_update_provider_setting: {
         Args: {
+          p_confirm_api: boolean
           p_mode: Database["public"]["Enums"]["provider_mode"]
           p_stage: Database["public"]["Enums"]["pipeline_stage"]
         }

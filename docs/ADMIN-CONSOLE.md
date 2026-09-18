@@ -122,13 +122,25 @@ sign-in needed: … Run `claude auth login` …" or "Provider usage limit: … n
 cause on the PC, then resolve the job back to the stage's pending status from the article page. The
 job keeps its CLI mode; the console never offers to switch it to an API.
 
+## Metered API modes
+
+OpenAI API (`openai_api`) serves research and audit, Anthropic API (`anthropic_api`) serves writing
+and revision, and Gemini API (`gemini_api`) serves images. Selecting one on `/admin/providers`
+reveals a billing warning and a required confirmation checkbox. The server action and database both
+enforce that confirmation and record the editor and time. Selecting a free mode again clears it.
+The new-article form offers an API choice only when that exact stage default remains confirmed.
+
+Credentials stay on the worker PC. If the current setting requires a key that is absent, worker
+startup exits with configuration code 2; if a running worker encounters a newly selected mode
+without its key, the job stops for an editor. Successful runs show their provider usage metadata in
+the existing run history. See [PROVIDERS.md](PROVIDERS.md) for setup and retry behaviour.
+
 ## Not in this phase
 
 - **Editing a draft** (`/admin/articles/[jobId]/edit`) needs `drafts.origin = 'admin_edit'` writes,
   plus an atomic decision about invalidating images and forcing re-audit. It stays deferred rather
   than inserting an unconstrained version that an old approval could accidentally publish; a
   correction today goes through escalation and a revision or a fresh manual draft.
-- **API provider modes** arrive with their adapters and cost confirmation in Phase 10.
 - **Managing memberships** is a SQL-editor task in version 1.
 
 ## Adding a screen

@@ -34,13 +34,14 @@ is installed, supported, and signed in to a subscription.
 The worker registers research, draft, image, audit, revision, publish, and verify handlers. Provider
 stages implement `mock`, the manual subscription modes (`manual_chatgpt` for research and audit,
 `manual_claude` for writing and revision, `manual_gemini` for images), and the subscription CLI
-modes (`codex_cli` for research and audit, `claude_code` for writing and revision); publication and
-verification use the internal services. A manual stage prepares and snapshots the exact prompt,
-releases its lease, and waits for an editor to paste or upload the response in the console, so a
-manual job never holds the worker. A CLI stage runs the CLI on this PC while holding and renewing its
-lease. A job configured for an API adapter (Phase 10) is rejected as a permanent configuration error
-rather than silently falling back to a mock or billable provider; the console offers only the
-implemented modes.
+modes (`codex_cli` for research and audit, `claude_code` for writing and revision), and the API modes
+(`openai_api`, `anthropic_api`, and `gemini_api`); publication and verification use the internal
+services. A manual stage prepares and snapshots the exact prompt, releases its lease, and waits for
+an editor to paste or upload the response in the console, so a manual job never holds the worker. A
+CLI or API stage runs on this PC while holding and renewing its lease. At startup the worker reads
+the current provider settings and requires only keys for API providers selected there. A mode
+switched while an already-running worker lacks its key stops as an actionable authentication
+failure. It is never replaced with a mock, CLI, manual, or different API mode.
 
 At start-up (and every ten minutes under `worker:start`) the worker probes both CLIs — version,
 supported options, and sign-in, never a prompt — and includes the result in its heartbeat, where the

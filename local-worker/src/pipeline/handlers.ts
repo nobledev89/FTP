@@ -3,6 +3,7 @@ import type { ArtifactStore, JobContext } from "../db/artifact-store.js";
 import type { Json } from "../db/database.types.js";
 import { StructuredLogger } from "../logging/logger.js";
 import type { CliAdapterSet } from "../providers/cli/adapters.js";
+import type { ApiAdapterSet } from "../providers/api/adapters.js";
 import type { PipelineStage, PromptTemplate, RunContext } from "../providers/contract.js";
 import { resolveAdapter } from "../providers/registry.js";
 import type { AuditStageInput } from "../providers/mock/audit.js";
@@ -30,6 +31,8 @@ export type PipelineDependencies = Readonly<{
   verifier: VerificationService;
   /** Subscription CLI adapters. Without them, a job in a CLI mode fails as unsupported. */
   cli?: CliAdapterSet;
+  /** Metered API adapters. They still refuse execution when their selected credential is absent. */
+  api?: ApiAdapterSet;
   logger?: StructuredLogger;
   now?: () => Date;
 }>;
@@ -106,7 +109,7 @@ function isRetryable(error: unknown): boolean {
 }
 
 export function createPipelineHandlers(dependencies: PipelineDependencies): StageHandlers {
-  const { store, publisher, verifier, cli } = dependencies;
+  const { store, publisher, verifier, cli, api } = dependencies;
   const logger = dependencies.logger ?? new StructuredLogger();
   const now = dependencies.now ?? (() => new Date());
 
@@ -134,6 +137,7 @@ export function createPipelineHandlers(dependencies: PipelineDependencies): Stag
       stage as "research" | "draft" | "revision" | "images" | "audit",
       runContext.mode,
       cli,
+      api,
     ) as unknown as {
       prepare(
         input: TInput,

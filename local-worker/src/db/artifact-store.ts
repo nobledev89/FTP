@@ -643,7 +643,16 @@ export class ArtifactStore {
     }>,
   ): Promise<ArtifactRef> {
     const artifact = imageArtifactSchema.parse(input.artifact);
-    const extension = artifact.mimeType === "image/png" ? "png" : "bin";
+    const extension =
+      artifact.mimeType === "image/png"
+        ? "png"
+        : artifact.mimeType === "image/jpeg"
+          ? "jpg"
+          : artifact.mimeType === "image/webp"
+            ? "webp"
+            : artifact.mimeType === "image/avif"
+              ? "avif"
+              : "bin";
     const privatePath = `jobs/${input.jobId}/images/slot-${artifact.slot}-${(
       artifact.contentHash ?? "nohash"
     ).slice(0, 16)}.${extension}`;

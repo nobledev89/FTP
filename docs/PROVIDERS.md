@@ -7,16 +7,13 @@ free mode never silently becomes a billable one (plan section 2, decision 6).
 
 ## Modes
 
-| Stage              | Implemented modes                                | Version 1 default |
-| ------------------ | ------------------------------------------------ | ----------------- |
-| Research           | `mock`, `manual_chatgpt`, `codex_cli`            | `manual_chatgpt`  |
-| Draft and revision | `mock`, `manual_claude`, `claude_code`           | `claude_code`     |
-| Images             | `mock`, `manual_gemini`                          | `manual_gemini`   |
-| Audit              | `mock`, `manual_chatgpt`, `codex_cli`            | `manual_chatgpt`  |
-| Publish and verify | `internal` (deterministic services, no provider) | `internal`        |
-
-API modes (`openai_api`, `anthropic_api`, `gemini_api`) arrive in Phase 10. Until then the console
-does not offer them and `admin_update_provider_setting` refuses them.
+| Stage              | Implemented modes                                       | Version 1 default |
+| ------------------ | ------------------------------------------------------- | ----------------- |
+| Research           | `mock`, `manual_chatgpt`, `codex_cli`, `openai_api`     | `manual_chatgpt`  |
+| Draft and revision | `mock`, `manual_claude`, `claude_code`, `anthropic_api` | `claude_code`     |
+| Images             | `mock`, `manual_gemini`, `gemini_api`                   | `manual_gemini`   |
+| Audit              | `mock`, `manual_chatgpt`, `codex_cli`, `openai_api`     | `manual_chatgpt`  |
+| Publish and verify | `internal` (deterministic services, no provider)        | `internal`        |
 
 All modes share one contract (`local-worker/src/providers/contract.ts`). A stage adapter prepares
 the prompt from the active prompt template, executes, and normalizes the result through the same
@@ -27,6 +24,49 @@ prompt snapshot, provider run, and artifact version is kept.
 - **Manual** modes prepare the prompt and wait for an editor to paste or upload the result in the
   console; see [ADMIN-CONSOLE.md](ADMIN-CONSOLE.md).
 - **Subscription CLI** modes run Claude Code or Codex on the worker PC, as described below.
+- **API** modes make metered requests from the worker PC only, after the cost confirmation and key
+  checks described below.
+
+## Optional metered APIs
+
+| Mode            | Provider API           | Stages          | Default model            |
+| --------------- | ---------------------- | --------------- | ------------------------ |
+| `openai_api`    | OpenAI Responses       | research, audit | `gpt-5`                  |
+| `anthropic_api` | Anthropic Messages     | draft, revision | `claude-sonnet-5`        |
+| `gemini_api`    | Gemini generateContent | images          | `gemini-3.1-flash-image` |
+
+API credentials live only in `local-worker/.env.local`; they are never stored in Supabase, sent to
+Vercel, or passed to a subscription CLI. Add only the keys for modes you intend to enable:
+
+```dotenv
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+GEMINI_API_KEY=...
+```
+
+Then restart the worker and select the API mode on **Providers**. The form shows a metered-cost
+warning and will not submit until an editor checks the confirmation. The database records who
+confirmed and when. Switching back to a free mode clears that confirmation. New article jobs can
+use a billable mode only while that exact stage default is enabled and confirmed.
+
+The optional model overrides are `OPENAI_API_MODEL`, `ANTHROPIC_API_MODEL`, and
+`GEMINI_IMAGE_MODEL`. `API_TIMEOUT_MS` defaults to five minutes per request and
+`API_MAX_RESPONSE_BYTES` defaults to 16 MB. Gemini makes one request per requested image slot.
+
+Research gives OpenAI's API web search; audit gets no web tool. Anthropic receives no tools and
+writes only from the prompt's research packet. Every text response is constrained by the JSON
+Schema projected from the shared Zod artifact contract, then validated by the full contract before
+storage. Gemini bytes are capped at 10 MiB per image, checked for a supported PNG/JPEG/WebP header,
+hashed, and passed to the same private image store used by other modes.
+
+Successful API runs store the provider, resolved model, response ID, and token/cache/tool counts
+exposed by the response in `provider_runs.usage`, with `billing: "metered_api"`. The application
+does not estimate money from mutable list prices, so `cost_amount` stays empty; use the provider's
+own account budget and billing dashboard as the monetary authority.
+
+Authentication or exhausted-credit failures go to an editor; rate limits and transient network or
+5xx errors use the existing bounded retry policy; invalid JSON, refusals, and schema failures need
+human review. There is no automatic fallback in any direction.
 
 ## Subscription CLIs
 

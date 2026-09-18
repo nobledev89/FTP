@@ -89,7 +89,9 @@ Worker setup and operational behaviour are documented in
 the manual ChatGPT, Claude, and Gemini handoffs (continued from the admin console; see
 [docs/ADMIN-CONSOLE.md](docs/ADMIN-CONSOLE.md)), Claude Code and Codex on the owner's subscriptions
 (see [docs/PROVIDERS.md](docs/PROVIDERS.md)), and the internal publishing and verification services.
-Phase 10 adds optional API adapters without changing the artifact or queue contracts.
+Optional OpenAI, Anthropic, and Gemini APIs use the same prompts, schemas, artifact stores, and queue
+contracts. They are enabled per stage only after an editor confirms metered billing and the worker
+has the corresponding key; see [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 ## Documentation
 

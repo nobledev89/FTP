@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import type { WorkerEnv } from "../config/env.js";
+import type { ApiProvider, WorkerEnv } from "../config/env.js";
 import type { Database, Json } from "./database.types.js";
 
 type Enums = Database["public"]["Enums"];
@@ -89,6 +89,24 @@ export function createWorkerClient(env: WorkerEnv): SupabaseClient<Database> {
 
 export class SupabaseWorkerStore implements WorkerStore {
   constructor(private readonly client: SupabaseClient<Database>) {}
+
+  /** API credentials are required only when a stored default currently selects that provider. */
+  async apiProvidersInUse(): Promise<readonly ApiProvider[]> {
+    const rows = unwrap(
+      await this.client
+        .from("provider_settings")
+        .select("mode")
+        .in("mode", ["openai_api", "anthropic_api", "gemini_api"]),
+      "load API provider settings",
+    );
+    const providers = new Set<ApiProvider>();
+    for (const { mode } of rows) {
+      if (mode === "openai_api") providers.add("openai");
+      if (mode === "anthropic_api") providers.add("anthropic");
+      if (mode === "gemini_api") providers.add("gemini");
+    }
+    return [...providers];
+  }
 
   async heartbeat(input: Heartbeat): Promise<string> {
     const result = await this.client.rpc("heartbeat_worker", {

@@ -1,14 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { idleActionResult } from "@/lib/admin/action-result";
 import { updateProviderSettingAction } from "@/lib/admin/provider-actions";
 import { IMPLEMENTED_MODES, type SelectableStage } from "@/lib/admin/provider-modes";
-import { providerModeLabel, stageLabel } from "@/lib/admin/status-display";
+import { isBillableMode, providerModeLabel, stageLabel } from "@/lib/admin/status-display";
 import type { Database } from "@/lib/supabase/database.types";
 
-import { Field, FormMessage, controlClass } from "./form";
+import { CheckboxField, Field, FormMessage, controlClass } from "./form";
 import { SubmitButton } from "./submit-button";
 
 type ProviderMode = Database["public"]["Enums"]["provider_mode"];
@@ -25,8 +25,8 @@ export function ProviderSettingForm({
   const [state, action] = useActionState(updateProviderSettingAction, idleActionResult);
   const id = `provider-default-${stage}`;
   const options = IMPLEMENTED_MODES[stage];
-  // A stored default can name a mode without an adapter (an API mode before Phase 10). Show it as
-  // it is rather than letting the select fall back to displaying its first option.
+  const [selectedMode, setSelectedMode] = useState<ProviderMode>(currentMode);
+  // Keep an unknown stored mode visible instead of allowing the select to display its first item.
   const unavailable = options.includes(currentMode) ? null : currentMode;
   return (
     <form action={action} className="grid gap-3 rounded-panel border border-border p-3">
@@ -39,10 +39,11 @@ export function ProviderSettingForm({
       >
         <select
           className={controlClass}
-          defaultValue={currentMode}
+          value={selectedMode}
           disabled={!canEdit}
           id={id}
           name="mode"
+          onChange={(event) => setSelectedMode(event.target.value as ProviderMode)}
         >
           {unavailable ? (
             <option disabled value={unavailable}>
@@ -56,6 +57,18 @@ export function ProviderSettingForm({
           ))}
         </select>
       </Field>
+      {isBillableMode(selectedMode) ? (
+        <div className="rounded-panel border border-warning-border bg-warning-subtle p-3">
+          <CheckboxField
+            disabled={!canEdit}
+            hint="This confirmation is recorded with the provider setting. Usage is logged, but the provider account controls the actual budget and charges."
+            id={`${id}-cost-confirmation`}
+            label={`I understand that every ${providerModeLabel(selectedMode)} run is metered and billed by the provider.`}
+            name="confirmApi"
+            required
+          />
+        </div>
+      ) : null}
       <div className="flex justify-end">
         <SubmitButton disabled={!canEdit} pendingLabel="Saving…" variant="secondary">
           Save default

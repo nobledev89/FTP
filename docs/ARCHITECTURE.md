@@ -125,16 +125,18 @@ either, because a layout does not control whether nested segments render. Each p
 
 ## Environment matrix
 
-| Variable                                | Web (Vercel) | Worker (PC) | Notes                                    |
-| --------------------------------------- | ------------ | ----------- | ---------------------------------------- |
-| `NEXT_PUBLIC_SITE_URL`                  | yes          | —           | Canonical public origin                  |
-| `NEXT_PUBLIC_SUPABASE_URL`              | yes          | —           | Browser-safe                             |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`  | yes          | —           | Browser-safe                             |
-| `SUPABASE_URL`                          | yes          | yes         | Server-side                              |
-| `REVALIDATION_SECRET`                   | yes          | yes         | Shared secret for signed revalidation    |
-| `SUPABASE_SERVICE_ROLE_KEY`             | **no**       | yes         | Never on Vercel                          |
-| `WORKER_*`, `PUBLISH_VERIFY_TIMEOUT_MS` | —            | yes         | Tunables with defaults                   |
-| `CODEX_BIN`, `CLAUDE_BIN`               | —            | yes         | Subscription CLI binaries                |
-| `OPENAI_API_KEY` etc.                   | —            | optional    | Required only when a stage uses API mode |
+| Variable                                   | Web (Vercel) | Worker (PC) | Notes                                    |
+| ------------------------------------------ | ------------ | ----------- | ---------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                     | yes          | —           | Canonical public origin                  |
+| `NEXT_PUBLIC_SUPABASE_URL`                 | yes          | —           | Browser-safe                             |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`     | yes          | —           | Browser-safe                             |
+| `SUPABASE_URL`                             | yes          | yes         | Server-side                              |
+| `REVALIDATION_SECRET`                      | yes          | yes         | Shared secret for signed revalidation    |
+| `SUPABASE_SERVICE_ROLE_KEY`                | **no**       | yes         | Never on Vercel                          |
+| `WORKER_*`, `PUBLISH_VERIFY_TIMEOUT_MS`    | —            | yes         | Tunables with defaults                   |
+| `CODEX_BIN`, `CLAUDE_BIN`                  | —            | yes         | Subscription CLI binaries                |
+| `OPENAI_API_KEY` etc.                      | —            | optional    | Required only when a stage uses API mode |
+| `*_API_MODEL`, `GEMINI_IMAGE_MODEL`        | —            | optional    | API model overrides; reviewed defaults   |
+| `API_TIMEOUT_MS`, `API_MAX_RESPONSE_BYTES` | —            | optional    | Bounded API request controls             |
 
 See [.env.example](../.env.example) for the annotated template.

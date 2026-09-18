@@ -40,6 +40,8 @@ Migrations run in order:
 | `20260918110000_worker_status.sql`           | Read-only worker heartbeat and exact queue-health snapshot                                                                                                         |
 | `20260918120000_mock_pipeline.sql`           | Authorized immutable prompt-version creation, activation, and rollback                                                                                             |
 | `20260918130000_manual_workflows.sql`        | Authorized manual import and image continuation, abandoned-run cancellation, implemented-mode provider defaults                                                    |
+| `20260918140000_subscription_cli_modes.sql`  | Enables the stage-specific Claude Code and Codex defaults                                                                                                          |
+| `20260918150000_api_provider_modes.sql`      | Enables stage-specific API defaults only with recorded metered-cost confirmation                                                                                   |
 
 Design rules enforced by the database:
 
@@ -136,7 +138,7 @@ that exact `action_required` run, with no lease and not paused, and runs in one 
 | `admin_import_manual_result(job_id, run_id, output)`                                       | Stores a research packet (with sources, claims, evidence), draft, revised draft, or audit; finishes the run; completes the stage through `complete_stage_core`     |
 | `admin_import_manual_image(job_id, run_id, slot, metadata, private_path, mime, size, ...)` | Records one uploaded image as `ready` for a requested slot. The object must exist under `jobs/<job id>/` and its stored size and type must match the recorded ones |
 | `admin_complete_manual_images(job_id, run_id)`                                             | Completes `IMAGES_PROCESSING → AUDIT_PENDING` once every requested slot has a ready image from this run (`FT005` otherwise)                                        |
-| `admin_update_provider_setting(stage, mode)`                                               | Changes a stage's default for new jobs. Accepts only modes with a worker adapter; the writing default also sets revision                                           |
+| `admin_update_provider_setting(stage, mode, confirm_api)`                                  | Changes a stage's default for new jobs. API modes require confirmation and record the editor/time; free modes clear it; writing also sets revision                 |
 
 A second import of a finished run fails with `FT004`. A draft that does not brief every requested
 image slot fails with `22023`. When a job leaves a manual wait without an import (escalation), the

@@ -98,33 +98,47 @@ export const manualAuditAdapter: StageAdapter<AuditStageInput, AuditOutput> = ne
 );
 
 /** Gemini is file-oriented, so its prepared prompt contains one complete section per image slot. */
+export function imageSlotPrompts(
+  input: ImageStageInput,
+  context: RunContext,
+): readonly Readonly<{
+  brief: DraftOutput["imageBriefs"][number];
+  prompt: string;
+}>[] {
+  return input.draft.imageBriefs
+    .filter((brief) => brief.slot < context.brief.imageCount)
+    .sort((left, right) => left.slot - right.slot)
+    .map((brief) => ({
+      brief,
+      prompt: context.template
+        ? renderTemplate(context.template.content, {
+            styleGuide: context.styleGuide ?? "",
+            title: input.draft.title,
+            articleType: context.brief.articleType,
+            slot: String(brief.slot),
+            role: brief.role,
+            aspectRatio: brief.aspectRatio,
+            purpose: brief.purpose,
+            altText: brief.altText,
+            prompt: brief.prompt,
+            schemaVersion: context.schemaVersion,
+          })
+        : `Generate the ${brief.role} image for ${input.draft.title}: ${brief.prompt}`,
+    }));
+}
+
 export class ManualImagesAdapter implements StageAdapter<ImageStageInput, ImageStageOutput> {
   readonly stage = "images" as const;
   readonly mode = "manual_gemini" as const;
   readonly provider = "gemini" as const;
 
   async prepare(input: ImageStageInput, context: RunContext): Promise<PreparedRun> {
-    const briefs = input.draft.imageBriefs
-      .filter((brief) => brief.slot < context.brief.imageCount)
-      .sort((left, right) => left.slot - right.slot);
-    const prompt = briefs
-      .map((brief) => {
-        const body = context.template
-          ? renderTemplate(context.template.content, {
-              styleGuide: context.styleGuide ?? "",
-              title: input.draft.title,
-              articleType: context.brief.articleType,
-              slot: String(brief.slot),
-              role: brief.role,
-              aspectRatio: brief.aspectRatio,
-              purpose: brief.purpose,
-              altText: brief.altText,
-              prompt: brief.prompt,
-              schemaVersion: context.schemaVersion,
-            })
-          : `Generate the ${brief.role} image for ${input.draft.title}: ${brief.prompt}`;
-        return `===== IMAGE SLOT ${brief.slot} (${brief.role}) =====\n\n${body}`;
-      })
+    const slots = imageSlotPrompts(input, context);
+    const prompt = slots
+      .map(
+        ({ brief, prompt: body }) =>
+          `===== IMAGE SLOT ${brief.slot} (${brief.role}) =====\n\n${body}`,
+      )
       .join("\n\n");
 
     return {
@@ -133,9 +147,9 @@ export class ManualImagesAdapter implements StageAdapter<ImageStageInput, ImageS
       promptVersion: context.template?.version ?? null,
       inputRefs: {
         draft_version: input.draftVersion,
-        briefs: briefs.length,
+        briefs: slots.length,
         requested: context.brief.imageCount,
-        slots: briefs.map((brief) => brief.slot),
+        slots: slots.map(({ brief }) => brief.slot),
       },
       schemaVersion: context.schemaVersion,
       provider: this.provider,

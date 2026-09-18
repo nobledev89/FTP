@@ -45,6 +45,7 @@ const outsiderEmail = `e2e-outsider-${randomUUID().slice(0, 8)}@example.test`;
 const topic = `End-to-end console check ${randomUUID().slice(0, 8)}`;
 
 let service: SupabaseClient<Database>;
+let ownerId: string;
 const createdUserIds: string[] = [];
 let jobId: string | null = null;
 let originalByline: string | null = null;
@@ -69,7 +70,7 @@ test.beforeAll(async () => {
   const site = await service.from("sites").select("id").eq("slug", "fintechpulse").single();
   if (site.error || !site.data) throw site.error ?? new Error("seed site missing");
 
-  const ownerId = await createUser(ownerEmail);
+  ownerId = await createUser(ownerEmail);
   await createUser(outsiderEmail);
 
   const membership = await service
@@ -132,6 +133,11 @@ function workerRunner(workerId: string): WorkerRunner {
     CODEX_BIN: "codex",
     CLAUDE_BIN: "claude",
     CLI_TIMEOUT_MS: 1_200_000,
+    API_TIMEOUT_MS: 300_000,
+    API_MAX_RESPONSE_BYTES: 16_000_000,
+    OPENAI_API_MODEL: "gpt-5",
+    ANTHROPIC_API_MODEL: "claude-sonnet-5",
+    GEMINI_IMAGE_MODEL: "gemini-3.1-flash-image",
   };
   const workerClient = createWorkerClient(env);
   const artifacts = new ArtifactStore(workerClient);
@@ -524,6 +530,61 @@ test.describe("authenticated admin console", () => {
       .update({ mode: "claude_code" })
       .in("stage", ["draft", "revision"]);
     expect(restored.error).toBeNull();
+  });
+
+  test("requires and records explicit metered API confirmation", async ({ page }) => {
+    await signIn(page, ownerEmail, /\/admin$/);
+    await page.goto("/admin/providers");
+
+    const research = page.getByLabel("Research", { exact: true });
+    await research.selectOption("openai_api");
+    const form = page.locator("form").filter({ has: research });
+    const confirmation = form.getByLabel(/every OpenAI API run is metered and billed/i);
+    await expect(confirmation).toBeVisible();
+    await expect(confirmation).not.toBeChecked();
+    expect(await form.evaluate((element: HTMLFormElement) => element.checkValidity())).toBe(false);
+
+    await confirmation.check();
+    await form.getByRole("button", { name: "Save default" }).click();
+    await expect(page.getByText("Provider default updated for new jobs.")).toBeVisible();
+
+    const enabled = await service
+      .from("provider_settings")
+      .select("mode, api_mode_confirmed_at, api_mode_confirmed_by")
+      .eq("stage", "research")
+      .single();
+    expect(enabled.error).toBeNull();
+    expect(enabled.data?.mode).toBe("openai_api");
+    expect(enabled.data?.api_mode_confirmed_at).not.toBeNull();
+    expect(enabled.data?.api_mode_confirmed_by).toBe(ownerId);
+
+    await page.goto("/admin/articles/new");
+    await expect(
+      page.getByLabel("Research", { exact: true }).locator('option[value="openai_api"]'),
+    ).toHaveCount(1);
+
+    await page.goto("/admin/providers");
+    const restoredResearch = page.getByLabel("Research", { exact: true });
+    const restoredForm = page.locator("form").filter({ has: restoredResearch });
+    await restoredResearch.selectOption("manual_chatgpt");
+    await expect(
+      restoredForm.getByLabel(/every OpenAI API run is metered and billed/i),
+    ).toBeHidden();
+    await restoredForm.getByRole("button", { name: "Save default" }).click();
+    await expect
+      .poll(async () => {
+        const restored = await service
+          .from("provider_settings")
+          .select("mode, api_mode_confirmed_at, api_mode_confirmed_by")
+          .eq("stage", "research")
+          .single();
+        return restored.data;
+      })
+      .toEqual({
+        mode: "manual_chatgpt",
+        api_mode_confirmed_at: null,
+        api_mode_confirmed_by: null,
+      });
   });
 
   test("completes a job through manual ChatGPT, Claude, and Gemini handoffs", async ({ page }) => {

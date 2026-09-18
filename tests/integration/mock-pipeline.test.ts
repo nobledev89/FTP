@@ -12,6 +12,10 @@ import { createWorkerClient, SupabaseWorkerStore } from "../../local-worker/src/
 import { StructuredLogger } from "../../local-worker/src/logging/logger.js";
 import { createPipelineHandlers } from "../../local-worker/src/pipeline/handlers.js";
 import {
+  createApiAdapters,
+  type ApiAdapterSet,
+} from "../../local-worker/src/providers/api/adapters.js";
+import {
   createCliAdapters,
   type CliAdapterSet,
 } from "../../local-worker/src/providers/cli/adapters.js";
@@ -73,12 +77,18 @@ function workerEnv(maxAttempts = 5): WorkerEnv {
     CODEX_BIN: "codex",
     CLAUDE_BIN: "claude",
     CLI_TIMEOUT_MS: 1_200_000,
+    API_TIMEOUT_MS: 300_000,
+    API_MAX_RESPONSE_BYTES: 16_000_000,
+    OPENAI_API_MODEL: "gpt-5",
+    ANTHROPIC_API_MODEL: "claude-sonnet-5",
+    GEMINI_IMAGE_MODEL: "gemini-3.1-flash-image",
   };
 }
 
 function pipeline(
   maxAttempts = 5,
   cli?: CliAdapterSet,
+  api?: ApiAdapterSet,
 ): {
   runner: WorkerRunner;
   client: SupabaseClient<WorkerDatabase>;
@@ -127,6 +137,7 @@ function pipeline(
       fetchPage,
     }),
     ...(cli ? { cli } : {}),
+    ...(api ? { api } : {}),
     logger: new StructuredLogger({}, { write() {} }),
     now: () => new Date("2026-09-18T09:00:00Z"),
   });
@@ -959,6 +970,94 @@ describe("subscription CLI providers", () => {
   });
 });
 
+describe("optional API providers", () => {
+  it("switches one confirmed stage and completes through the unchanged pipeline boundary", async () => {
+    await unwrap(
+      editor.client.rpc("admin_update_provider_setting", {
+        p_stage: "research",
+        p_mode: "openai_api",
+        p_confirm_api: true,
+      }),
+    );
+
+    try {
+      const topic = "Metered API research boundary";
+      const jobId = await createJob(editor, {
+        topic,
+        imageCount: 0,
+        autoPublish: true,
+        researchMode: "openai_api",
+      });
+      await unwrap(adminAction(editor, jobId, "start"));
+      const runContext = manualContext(jobId, "research", "mock");
+      const packet = buildResearchPacket({
+        ...runContext,
+        brief: { ...runContext.brief, topic, imageCount: 0 },
+      });
+      const fetchApi = (async () =>
+        new Response(
+          JSON.stringify({
+            id: "resp_integration",
+            model: "gpt-test",
+            status: "completed",
+            output: [
+              { type: "web_search_call", id: "search_integration" },
+              {
+                type: "message",
+                content: [{ type: "output_text", text: JSON.stringify(packet) }],
+              },
+            ],
+            usage: { input_tokens: 100, output_tokens: 200, total_tokens: 300 },
+          }),
+          { status: 200 },
+        )) as typeof fetch;
+      const api = createApiAdapters({
+        openai: { apiKey: "integration-openai-key", model: "gpt-test" },
+        anthropic: { model: "claude-test" },
+        gemini: { model: "gemini-test" },
+        runtime: { fetch: fetchApi, timeoutMs: 5_000, maxResponseBytes: 2_000_000 },
+      });
+      const { runner } = pipeline(5, undefined, api);
+
+      await driveTo(runner, jobId, "VERIFIED");
+
+      const runs = await unwrap(
+        editor.client
+          .from("provider_runs")
+          .select("stage, mode, provider, status, usage, cost_amount")
+          .eq("job_id", jobId)
+          .order("created_at"),
+      );
+      expect(runs[0]).toMatchObject({
+        stage: "research",
+        mode: "openai_api",
+        provider: "openai",
+        status: "succeeded",
+        usage: {
+          billing: "metered_api",
+          input_tokens: 100,
+          output_tokens: 200,
+          total_tokens: 300,
+          web_search_calls: 1,
+        },
+        cost_amount: null,
+      });
+      expect(runs.slice(1).every((run) => run.mode === "mock")).toBe(true);
+      expect(
+        await unwrap(editor.client.from("research_packets").select("id").eq("job_id", jobId)),
+      ).toHaveLength(1);
+    } finally {
+      await unwrap(
+        editor.client.rpc("admin_update_provider_setting", {
+          p_stage: "research",
+          p_mode: "manual_chatgpt",
+          p_confirm_api: false,
+        }),
+      );
+    }
+  });
+});
+
 describe("prompt versions", () => {
   it("seeds all six templates and supports immutable edit, activation, and rollback", async () => {
     const seedKeys = ["editorial-style", "research", "draft", "image-brief", "audit", "revise"];
@@ -1015,11 +1114,12 @@ describe("prompt versions", () => {
     expect(denied.error?.code).toBe("42501");
   });
 
-  it("updates only implemented no-cost provider defaults and keeps revision aligned with writing", async () => {
+  it("updates implemented defaults, records API confirmation, and keeps writing aligned", async () => {
     const changed = await unwrap(
       editor.client.rpc("admin_update_provider_setting", {
         p_stage: "draft",
         p_mode: "manual_claude",
+        p_confirm_api: false,
       }),
     );
     expect(changed).toEqual([
@@ -1027,11 +1127,11 @@ describe("prompt versions", () => {
       { updated_stage: "revision", updated_mode: "manual_claude" },
     ]);
 
-    // Phase 9: the subscription CLIs are selectable; API modes wait for Phase 10.
     const codex = await unwrap(
       editor.client.rpc("admin_update_provider_setting", {
         p_stage: "research",
         p_mode: "codex_cli",
+        p_confirm_api: false,
       }),
     );
     expect(codex).toEqual([{ updated_stage: "research", updated_mode: "codex_cli" }]);
@@ -1039,6 +1139,7 @@ describe("prompt versions", () => {
       editor.client.rpc("admin_update_provider_setting", {
         p_stage: "draft",
         p_mode: "claude_code",
+        p_confirm_api: false,
       }),
     );
     expect(claude).toEqual([
@@ -1049,23 +1150,76 @@ describe("prompt versions", () => {
       ["research", "openai_api"],
       ["draft", "anthropic_api"],
       ["images", "gemini_api"],
-      ["images", "codex_cli"],
     ] as const) {
-      const unsupported = await editor.client.rpc("admin_update_provider_setting", {
+      const unconfirmed = await editor.client.rpc("admin_update_provider_setting", {
         p_stage: stage,
         p_mode: mode,
+        p_confirm_api: false,
       });
-      expect(unsupported.error?.code).toBe("22023");
+      expect(unconfirmed.error?.code).toBe("22023");
+      await unwrap(
+        editor.client.rpc("admin_update_provider_setting", {
+          p_stage: stage,
+          p_mode: mode,
+          p_confirm_api: true,
+        }),
+      );
     }
+    const confirmed = await unwrap(
+      serviceClient()
+        .from("provider_settings")
+        .select("stage, mode, api_mode_confirmed_at, api_mode_confirmed_by")
+        .in("stage", ["research", "draft", "revision", "images"])
+        .order("stage"),
+    );
+    expect(confirmed).toHaveLength(4);
+    expect(confirmed.every((setting) => setting.api_mode_confirmed_at !== null)).toBe(true);
+    expect(confirmed.every((setting) => setting.api_mode_confirmed_by === editor.id)).toBe(true);
+
+    const unsupported = await editor.client.rpc("admin_update_provider_setting", {
+      p_stage: "images",
+      p_mode: "codex_cli",
+      p_confirm_api: true,
+    });
+    expect(unsupported.error?.code).toBe("22023");
     const denied = await viewer.client.rpc("admin_update_provider_setting", {
       p_stage: "research",
       p_mode: "manual_chatgpt",
+      p_confirm_api: false,
     });
     expect(denied.error?.code).toBe("42501");
     const restored = await serviceClient()
       .from("provider_settings")
-      .update({ mode: "manual_chatgpt" })
-      .eq("stage", "research");
+      .update({
+        mode: "manual_chatgpt",
+        api_mode_confirmed_at: null,
+        api_mode_confirmed_by: null,
+      })
+      .in("stage", ["research", "audit"]);
     expect(restored.error).toBeNull();
+    expect(
+      (
+        await serviceClient()
+          .from("provider_settings")
+          .update({
+            mode: "claude_code",
+            api_mode_confirmed_at: null,
+            api_mode_confirmed_by: null,
+          })
+          .in("stage", ["draft", "revision"])
+      ).error,
+    ).toBeNull();
+    expect(
+      (
+        await serviceClient()
+          .from("provider_settings")
+          .update({
+            mode: "manual_gemini",
+            api_mode_confirmed_at: null,
+            api_mode_confirmed_by: null,
+          })
+          .eq("stage", "images")
+      ).error,
+    ).toBeNull();
   });
 });

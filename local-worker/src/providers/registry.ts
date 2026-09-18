@@ -1,4 +1,5 @@
 import type { CliAdapterSet } from "./cli/adapters.js";
+import type { ApiAdapterSet } from "./api/adapters.js";
 import type { PipelineStage, ProviderMode, StageAdapter } from "./contract.js";
 import {
   ManualImagesAdapter,
@@ -80,12 +81,17 @@ export function resolveAdapter<S extends AdapterStage>(
   stage: S,
   mode: ProviderMode,
   cli?: CliAdapterSet,
+  api?: ApiAdapterSet,
 ): AdapterMap[S] {
   if (mode === "mock") return MOCK_ADAPTERS[stage];
   const manual = MANUAL_ADAPTERS[stage];
   if (manual?.mode === mode) return manual as AdapterMap[S];
   if (cli && stage !== "images") {
     const adapter = cli[stage as Exclude<AdapterStage, "images">];
+    if (adapter.mode === mode) return adapter as AdapterMap[S];
+  }
+  if (api) {
+    const adapter = api[stage];
     if (adapter.mode === mode) return adapter as AdapterMap[S];
   }
   throw new UnsupportedModeError(stage, mode);
@@ -99,12 +105,12 @@ export function implementedModes(stage: PipelineStage): readonly ProviderMode[] 
   switch (stage) {
     case "research":
     case "audit":
-      return ["mock", "manual_chatgpt", "codex_cli"];
+      return ["mock", "manual_chatgpt", "codex_cli", "openai_api"];
     case "draft":
     case "revision":
-      return ["mock", "manual_claude", "claude_code"];
+      return ["mock", "manual_claude", "claude_code", "anthropic_api"];
     case "images":
-      return ["mock", "manual_gemini"];
+      return ["mock", "manual_gemini", "gemini_api"];
     default:
       return ["internal"];
   }

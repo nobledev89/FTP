@@ -50,9 +50,15 @@ export const workerEnvSchema = z
     CODEX_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
     /** One CLI stage run, including web research. The lease is renewed while it runs. */
     CLI_TIMEOUT_MS: boundedInt(1_200_000, 60_000, 3_600_000),
+    /** One provider HTTP request. Image generation makes one bounded request per slot. */
+    API_TIMEOUT_MS: boundedInt(300_000, 10_000, 1_200_000),
+    API_MAX_RESPONSE_BYTES: boundedInt(16_000_000, 100_000, 25_000_000),
     OPENAI_API_KEY: nonEmpty.optional(),
     ANTHROPIC_API_KEY: nonEmpty.optional(),
     GEMINI_API_KEY: nonEmpty.optional(),
+    OPENAI_API_MODEL: nonEmpty.default("gpt-5"),
+    ANTHROPIC_API_MODEL: nonEmpty.default("claude-sonnet-5"),
+    GEMINI_IMAGE_MODEL: nonEmpty.default("gemini-3.1-flash-image"),
   })
   .superRefine((value, context) => {
     if (value.WORKER_HEARTBEAT_INTERVAL_MS * 2 > value.WORKER_LEASE_SECONDS * 1_000) {
@@ -92,6 +98,21 @@ export class WorkerConfigError extends Error {
 }
 
 /**
+ * Applies the second half of the environment contract once the worker has read the site's current
+ * provider settings. Free modes never require an API key; a selected API mode does.
+ */
+export function requireApiProviderCredentials(
+  env: WorkerEnv,
+  apiProvidersInUse: readonly ApiProvider[],
+): void {
+  const missing = [...new Set(apiProvidersInUse)]
+    .map((provider) => apiKeyByProvider[provider])
+    .filter((key) => env[key] === undefined)
+    .map((key) => `${key}: required because a stage is configured for API mode`);
+  if (missing.length > 0) throw new WorkerConfigError(missing);
+}
+
+/**
  * Parses worker configuration. `apiProvidersInUse` lists providers whose
  * stages are currently configured for `api` mode; only their keys are required.
  * Error messages name variables but never echo their values.
@@ -112,13 +133,7 @@ export function parseWorkerEnv(
     );
   }
 
-  const missing = [...new Set(apiProvidersInUse)]
-    .map((provider) => apiKeyByProvider[provider])
-    .filter((key) => result.data[key] === undefined)
-    .map((key) => `${key}: required because a stage is configured for API mode`);
-  if (missing.length > 0) {
-    throw new WorkerConfigError(missing);
-  }
+  requireApiProviderCredentials(result.data, apiProvidersInUse);
 
   return result.data;
 }

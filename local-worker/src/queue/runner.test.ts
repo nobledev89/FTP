@@ -28,6 +28,11 @@ const env: WorkerEnv = {
   CODEX_BIN: "codex",
   CLAUDE_BIN: "claude",
   CLI_TIMEOUT_MS: 1_200_000,
+  API_TIMEOUT_MS: 300_000,
+  API_MAX_RESPONSE_BYTES: 16_000_000,
+  OPENAI_API_MODEL: "gpt-5",
+  ANTHROPIC_API_MODEL: "claude-sonnet-5",
+  GEMINI_IMAGE_MODEL: "gemini-3.1-flash-image",
 };
 
 const claim: ClaimedJob = {

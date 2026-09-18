@@ -54,7 +54,8 @@ export default async function ProvidersPage() {
           on the worker and wait here without holding a queue lease. CLI modes use the sign-in on
           that PC and are refused if it is missing, signed out, or a billable API account; a usage
           limit waits for an editor and is never passed to an API. API modes remain unavailable
-          until their adapters and cost confirmation are implemented.
+          unless an editor explicitly confirms metered billing and the local worker has that
+          provider&rsquo;s API key.
         </Notice>
 
         {billable.length > 0 ? (

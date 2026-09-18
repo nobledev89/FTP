@@ -1,9 +1,14 @@
-import { WorkerConfigError } from "../config/env.js";
+import {
+  requireApiProviderCredentials,
+  WorkerConfigError,
+  type ApiProvider,
+} from "../config/env.js";
 import { loadWorkerEnv } from "../config/load-env.js";
 import { ArtifactStore } from "../db/artifact-store.js";
 import { createWorkerClient, SupabaseWorkerStore } from "../db/worker-store.js";
 import { StructuredLogger } from "../logging/logger.js";
 import { createPipelineHandlers } from "../pipeline/handlers.js";
+import { createApiAdapters } from "../providers/api/adapters.js";
 import { createCliAdapters } from "../providers/cli/adapters.js";
 import { CliCapabilityMonitor } from "../providers/cli/capabilities.js";
 import { PublishingService } from "../publishing/publish.js";
@@ -39,6 +44,24 @@ async function main(): Promise<number> {
   const client = createWorkerClient(env);
   const store = new SupabaseWorkerStore(client);
   const artifacts = new ArtifactStore(client);
+  let apiProvidersInUse: readonly ApiProvider[];
+  try {
+    apiProvidersInUse = await store.apiProvidersInUse();
+  } catch (error) {
+    logger.error("worker.command_failed", { command, error });
+    return 1;
+  }
+  try {
+    requireApiProviderCredentials(env, apiProvidersInUse);
+  } catch (error) {
+    logger.error("worker.configuration_invalid", {
+      error:
+        error instanceof WorkerConfigError
+          ? { name: error.name, message: error.message, issues: error.issues }
+          : error,
+    });
+    return 2;
+  }
   // The subscription CLIs receive an allowlisted environment built from this process's, never the
   // process environment itself, which holds the service-role key loaded from `.env.local`.
   const cli = createCliAdapters({
@@ -54,6 +77,24 @@ async function main(): Promise<number> {
     runtime: { timeoutMs: env.CLI_TIMEOUT_MS },
   });
   const capabilities = new CliCapabilityMonitor(cli.clis);
+  const api = createApiAdapters({
+    openai: {
+      model: env.OPENAI_API_MODEL,
+      ...(env.OPENAI_API_KEY ? { apiKey: env.OPENAI_API_KEY } : {}),
+    },
+    anthropic: {
+      model: env.ANTHROPIC_API_MODEL,
+      ...(env.ANTHROPIC_API_KEY ? { apiKey: env.ANTHROPIC_API_KEY } : {}),
+    },
+    gemini: {
+      model: env.GEMINI_IMAGE_MODEL,
+      ...(env.GEMINI_API_KEY ? { apiKey: env.GEMINI_API_KEY } : {}),
+    },
+    runtime: {
+      timeoutMs: env.API_TIMEOUT_MS,
+      maxResponseBytes: env.API_MAX_RESPONSE_BYTES,
+    },
+  });
   const handlers = createPipelineHandlers({
     store: artifacts,
     publisher: new PublishingService(
@@ -70,6 +111,7 @@ async function main(): Promise<number> {
       timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
     }),
     cli,
+    api,
     logger,
   });
   const runner = new WorkerRunner({

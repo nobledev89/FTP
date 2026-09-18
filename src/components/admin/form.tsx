@@ -74,6 +74,7 @@ type CheckboxFieldProps = {
   hint?: string;
   defaultChecked?: boolean;
   disabled?: boolean;
+  required?: boolean;
 };
 
 export function CheckboxField({
@@ -83,6 +84,7 @@ export function CheckboxField({
   hint,
   defaultChecked,
   disabled,
+  required,
 }: CheckboxFieldProps) {
   return (
     <div className="flex items-start gap-2">
@@ -93,6 +95,7 @@ export function CheckboxField({
         disabled={disabled}
         id={id}
         name={name}
+        required={required}
         type="checkbox"
       />
       <div className="grid gap-0.5">
