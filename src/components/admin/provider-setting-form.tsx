@@ -25,8 +25,8 @@ export function ProviderSettingForm({
   const [state, action] = useActionState(updateProviderSettingAction, idleActionResult);
   const id = `provider-default-${stage}`;
   const options = IMPLEMENTED_MODES[stage];
-  // A stored default can predate its adapter (the seed selects Claude Code for writing). Show it
-  // as it is rather than letting the select fall back to displaying its first option.
+  // A stored default can name a mode without an adapter (an API mode before Phase 10). Show it as
+  // it is rather than letting the select fall back to displaying its first option.
   const unavailable = options.includes(currentMode) ? null : currentMode;
   return (
     <form action={action} className="grid gap-3 rounded-panel border border-border p-3">

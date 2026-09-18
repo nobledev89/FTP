@@ -96,7 +96,7 @@ const BILLABLE_MODES: readonly Enums["provider_mode"][] = [
 
 const ACTION_REQUIRED_LABELS = {
   manual_input: "Manual input needed",
-  cli_auth: "CLI sign-in expired",
+  cli_auth: "CLI sign-in needed",
   usage_limit: "Provider usage limit",
   invalid_output: "Provider output rejected",
   editorial_review: "Editorial review",

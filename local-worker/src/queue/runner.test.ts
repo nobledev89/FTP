@@ -27,6 +27,7 @@ const env: WorkerEnv = {
   PUBLISH_VERIFY_TIMEOUT_MS: 15_000,
   CODEX_BIN: "codex",
   CLAUDE_BIN: "claude",
+  CLI_TIMEOUT_MS: 1_200_000,
 };
 
 const claim: ClaimedJob = {
@@ -113,6 +114,20 @@ describe("WorkerRunner", () => {
     await expect(runner.runOnce()).resolves.toEqual({ state: "idle" });
     expect(store.recoveries).toBe(1);
     expect(store.claims).toBe(0);
+  });
+
+  it("carries the subscription CLI probes in its heartbeat", async () => {
+    const store = new FakeStore();
+    const providers = { claude_code: { ready: true, version: "2.1.275" } };
+    const runner = new WorkerRunner({
+      env,
+      store,
+      logger: quietLogger(),
+      providerHealth: () => providers,
+    });
+
+    await runner.runOnce();
+    expect(store.heartbeats[0]?.health).toMatchObject({ state: "idle", providers });
   });
 
   it("lets two concurrent workers process one claim exactly once", async () => {

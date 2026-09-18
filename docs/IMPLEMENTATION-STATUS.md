@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 8 — Manual provider workflows (`COMPLETE`)                  |
-| Current task           | Phase 9 ready: subscription CLI providers                         |
-| Last updated           | 2026-09-18 12:37, Asia/Singapore                                  |
+| Current phase          | Phase 9 — Subscription CLI providers (`COMPLETE`)         |
+| Current task           | Phase 10 ready: optional API adapters                                 |
+| Last updated           | 2026-09-18 14:07, Asia/Singapore                                  |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `beeb4c7` (Phases 6–8), pushed; GitHub Actions run 35307982789 passed |
+| Relevant commit        | `627ebd8` on `origin/main` (Phases 6–8 are `beeb4c7`; CI run 35307982789 passed). Phase 9 is verified in the working tree, uncommitted. |
 | Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
-| Next action            | Start Phase 9 by re-inspecting the installed Claude Code CLI (`claude --version`, `claude --help`, login status) before writing its adapter. |
+| Next action            | Owner review, then commit and push Phase 9 so GitHub CI verifies it in a clean environment. |
 
 ## Status legend
 
@@ -36,12 +36,33 @@ This is the authoritative live record of implementation progress. Update it imme
 |     6 | Mock pipeline end to end                           | `COMPLETE`    |     100% | 2026-09-18 | 269 unit tests, 121 integration tests, 57 signed-out/design Playwright checks, and 10 authenticated checks pass; a real mock job reaches `VERIFIED` through the production stores and RPC boundaries. |
 |     7 | Public publication                                 | `COMPLETE`    |     100% | 2026-09-18 | 278 unit tests, 121 integration tests, 61 signed-out/design browser checks, and 12 authenticated/live-publication checks pass; a real rendered article clears all eight verifier checks. |
 |     8 | Manual provider workflows                          | `COMPLETE`    |     100% | 2026-09-18 | 283 unit tests, 125 integration tests, 61 signed-out/design browser checks, and 14 authenticated checks pass; a job created in the console completes research, writing, a Gemini upload, and audit through manual handoffs and reaches `VERIFIED` with no CLI or API key. |
-|     9 | Subscription CLI providers                         | `NOT_STARTED` |       0% | —         | —                |
+|     9 | Subscription CLI providers                         | `COMPLETE`    |     100% | 2026-09-18 | 335 unit tests, 129 integration tests, 61 signed-out/design and 14 authenticated browser checks pass; live Claude Code draft and live Codex research from the production prompts pass the artifact schemas; signed-out and usage-limited CLIs reach an actionable `NEEDS_HUMAN`. |
 |    10 | Optional API adapters                              | `NOT_STARTED` |       0% | —         | —                |
 |    11 | Publishing, scheduling, and verification hardening | `NOT_STARTED` |       0% | —         | —                |
 |    12 | Operations, documentation, and release QA          | `NOT_STARTED` |       0% | —         | —                |
 
 ## Active phase checklist
+
+### Phase 9 — Subscription CLI providers
+
+- [x] Re-inspect the installed CLIs: Claude Code 2.1.275 and codex-cli 0.146.0 help, sign-in status,
+      structured output, and their real signed-out, API-key, usage-limit, and 401 outputs.
+- [x] Claude Code first (draft and revision): `-p --output-format json --json-schema`, no tools, safe
+      mode, no user settings or MCP, editorial system prompt, prompt on stdin.
+- [x] Codex through `codex exec` (research and audit): ignored user config, strict config, read-only
+      sandbox, ephemeral, output schema and last-message file, live web search for research only.
+- [x] Capability probes before every prompt (version, required options, sign-in); billable sign-ins
+      refused; probe results in the heartbeat, `worker:status`, and the console Providers page.
+- [x] Safe process isolation: no shell (npm shims resolved to their targets), allowlisted
+      environment, empty scratch directory, timeouts, cancellation, output limits, process-tree kill.
+- [x] Error classification and redaction: auth, usage limit, rate limit, transient, invalid output,
+      permanent configuration; auth and usage limits go to an editor and never fall back to an API.
+- [x] Selectable per stage: registry, console, and `admin_update_provider_setting` accept
+      `claude_code` and `codex_cli`.
+- [x] Exit criterion, locally: CLI output is normalized by the same Zod contracts as mock and manual
+      output, and a signed-out CLI produces an actionable `NEEDS_HUMAN` state (database suite).
+- [x] Live Claude Code draft from the production prompt and schema.
+- [x] Live Codex research run from the production prompt and schema.
 
 ### Phase 8 — Manual provider workflows
 
@@ -219,11 +240,153 @@ This is the authoritative live record of implementation progress. Update it imme
   before production (Phase 11 or 12): upload from the browser straight to `article-work` under the
   existing editor Storage policy, then have the Server Action verify the stored object's bytes before
   calling `admin_import_manual_image`. Local and CI runs are unaffected.
+- **Decision: subscription CLIs run with no shell and an allowlisted environment (ADR 0007).** npm
+  installs both CLIs as `.cmd` shims; the worker resolves a shim to its real target (Claude Code's
+  `claude.exe`, Codex's `codex.js` under the worker's Node) and never passes arguments through
+  `cmd.exe`, which matters because `--json-schema` takes inline JSON only. The worker's own
+  `process.env` holds the service-role key loaded from `.env.local`, so a child gets a fresh
+  allowlisted environment instead; API keys are excluded by construction.
+- **Decision: a CLI is probed before every prompt, and a billable sign-in is refused.** The probe is
+  version, required options (cached per version), and the CLI's offline sign-in report. Claude Code is
+  accepted only with `authMethod` `claude.ai` or `oauth_token` on `firstParty`; Codex only with
+  "Logged in using ChatGPT". An API-key sign-in is an `auth` failure (console: "CLI sign-in needed"),
+  never a quiet switch to per-request billing. The probe also spares a signed-out Codex its minute of
+  401 retries.
+- **Decision: CLI runs ignore the owner's own configuration.** Claude Code runs with `--safe-mode`,
+  `--setting-sources ""`, `--strict-mcp-config`, no tools, and a short editorial system prompt, which
+  also cut its prompt-cache creation from about 9.8k to 1.1k tokens. Codex runs with
+  `--ignore-user-config`, so the owner's `config.toml` model (`gpt-5.6-sol`, `xhigh`) does not apply;
+  `CODEX_MODEL` and `CODEX_REASONING_EFFORT` set them for the worker explicitly.
+- **Decision: research gets live web search; the audit gets none.** Research must cite real, current
+  sources. The audit judges the draft against the research packet. `--strict-config` makes Codex
+  reject a mistyped `web_search` value rather than ignore it (verified against `bogus`).
+- **Decision: the CLI schema is a strict-mode projection; Zod stays the authority.** Zod's JSON Schema
+  includes keywords OpenAI strict mode rejects (including `format: "starts_with"`). The CLI receives
+  types, properties, enums, and nullability with every property required; lengths, patterns, and
+  cross-field rules are enforced afterwards by the same Zod schema as every other mode.
+- **Decision: subscription usage is usage, not cost.** A CLI run records tokens, turns, CLI version,
+  and `billing: "subscription"`; the cost columns stay empty. Claude Code's list-price figure is kept
+  as `list_price_estimate_usd` for comparison only.
+- **Decision: invalid CLI output keeps an excerpt, not the whole reply.** `provider_runs` has no raw
+  output column, so a rejected reply is summarized (redacted excerpt plus the first Zod issues) in the
+  run's error summary and the job's action message. A valid reply is retained as its artifact.
+  Adding a bounded raw-output column is a candidate for Phase 11 if editors need the full text.
+- **Decision: auth and usage-limit runs are recorded as not retryable.** The provider run's
+  `retryable` flag now matches the queue outcome: those classes go to an editor and are never retried
+  automatically. The `cli_auth` action label became "CLI sign-in needed", since it now also covers a
+  missing CLI and a billable sign-in.
 - **Decision: cache invalidation failure cannot undo publication.** Revalidation runs after the
   publication transaction and reports a safe boolean. The live verifier remains the correctness
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-18 — Phase 9 subscription CLI providers complete
+
+Date/time: 2026-09-18 14:07, Asia/Singapore
+
+Phase/task: Phase 9 — live Codex verification and phase exit
+
+Status change: Phase 9 `IN_PROGRESS` (95%) → `COMPLETE`. Current task moves to Phase 10.
+
+What changed: No code changed. The live Codex run recorded as pending in the previous entry was
+executed once the ChatGPT usage limit reset.
+
+Files/migrations affected: `docs/IMPLEMENTATION-STATUS.md` only.
+
+Verification performed: At 14:02 `codex login status` reported "Logged in using ChatGPT". The
+production `codex_cli` research adapter then ran `prompts/research.md` with the editorial style guide
+(9,746 characters) through the real resolver, allowlisted environment, capability probe, and
+`codex exec` arguments, with the projected `research-1` schema as `--output-schema`. OpenAI's strict
+structured outputs accepted the schema, and the reply passed the full `research-1` Zod contract,
+including unique keys and evidence references to existing sources, in 196 seconds: 18 sources (FCA,
+PSR, HM Treasury, Open Banking Limited, CMA, legislation.gov.uk), 12 claims, 14 facts, 4
+contradictions, and an 8-section recommended structure, from 4 live web searches. Usage was recorded
+as `billing: "subscription"` (166,758 input tokens, 118,272 cached, 8,030 output). Together with the
+live Claude Code draft in the previous entry, both CLIs have produced schema-valid artifacts from the
+production prompts, and the Phase 9 exit criterion is met: each CLI is selectable per stage, its
+output is normalized by the same contracts as mock and manual output, and a signed-out CLI produces
+an actionable `NEEDS_HUMAN` state.
+
+Result: Passed. Phase 9 is complete locally.
+
+Commit/PR: Not committed. The base is `627ebd8` on `origin/main`.
+
+Next action: Owner review, then commit and push Phase 9 so GitHub CI verifies it in a clean
+environment. Phase 10 then adds the optional API adapters behind explicit configuration and cost
+confirmation.
+
+### 2026-09-18 — Phase 9 subscription CLI providers implemented; live Codex run pending
+
+Date/time: 2026-09-18 13:25, Asia/Singapore
+
+Phase/task: Phase 9 — Claude Code and Codex adapters, capability probes, process isolation, error
+classification, console selection, and documentation
+
+Status change: Phase 9 `NOT_STARTED` → `IN_PROGRESS` (95%). It moves to `COMPLETE` once the live
+Codex research run is recorded.
+
+What changed: Re-inspected both installed CLIs and captured their real success, signed-out, API-key,
+usage-limit, and 401 outputs as test fixtures. Added `local-worker/src/providers/cli/`: a no-shell
+command resolver that maps npm `.cmd` shims to their executable or Node entry point; an allowlisted
+child environment; a bounded process runner with timeout, output cap, cancellation, and process-tree
+kill; a strict-mode JSON Schema projection of the Zod contracts and a single bounded JSON repair; a
+shared probe (version, required options, sign-in) run before every prompt; the Claude Code client
+(draft, revision) and the Codex client (research with live web search, audit without); stage adapters
+that reuse the reviewed prompt preparation and validate with the shared Zod schemas; a capability
+monitor that puts CLI state in the worker heartbeat and `worker:status`; and a scripted fake CLI for
+tests. The registry, pipeline handlers, worker entry point, and environment contract (`CLAUDE_MODEL`,
+`CODEX_MODEL`, `CODEX_REASONING_EFFORT`, `CLI_TIMEOUT_MS`) were extended. Migration
+`20260918140000_subscription_cli_modes.sql` lets editors select both CLI modes as defaults; the
+console offers them on New article and Providers, and the Providers page gained a Subscription CLIs
+panel read from the heartbeat. Wrote `docs/PROVIDERS.md` and ADR 0007, and updated the worker,
+console, and architecture guides, README, and `.env.example`. Fixed a race in the no-membership
+browser test (it read a response body after a later navigation), which failed once locally.
+
+Files/migrations affected: `supabase/migrations/20260918140000_subscription_cli_modes.sql`;
+`local-worker/src/providers/cli/**` (new), `local-worker/src/providers/{registry.ts,
+manual/adapters.test.ts}`, `local-worker/src/pipeline/handlers.ts`, `local-worker/src/cli/main.ts`,
+`local-worker/src/queue/{runner.ts,runner.test.ts}`, `local-worker/src/config/env.ts`;
+`src/lib/admin/{cli-capability.ts,cli-capability.test.ts,provider-modes.ts,configuration.ts,
+status-display.ts,status-display.test.ts}`, `src/components/admin/provider-setting-form.tsx`, the
+Providers page; `tests/integration/mock-pipeline.test.ts`, `tests/e2e/admin-session.spec.ts`;
+`docs/{PROVIDERS,LOCAL-WORKER,ADMIN-CONSOLE,ARCHITECTURE}.md`,
+`docs/decisions/{0007-subscription-cli-process-boundary.md,README.md}`, `README.md`,
+`.env.example`.
+
+Verification performed: A fresh `pnpm supabase:reset` applies all twelve migrations and both seed
+files; `pnpm db:lint` reports no schema errors; `pnpm db:types` is unchanged. `pnpm format:check`,
+`pnpm lint`, `pnpm typecheck`, `pnpm prompts:seed --check`, and `pnpm contracts:sync --check` pass.
+`pnpm test` passes 335 tests in 38 files, including shim resolution from the real npm shims, the
+environment allowlist, real child processes for argv/stdin, timeout, output-limit, cancellation, and
+missing-binary cases, classification of every captured CLI output, the strict schema projection, and
+fake-CLI adapter runs asserting the exact arguments, the prompt, and that no secret or API key reached
+any invocation. `pnpm test:integration` passes 129 tests in 8 files, including four new database
+scenarios: Codex research and audit with Claude Code writing reach `VERIFIED` through the real stores,
+Storage, publication, and verifier, with each CLI receiving exactly its snapshotted prompt and usage
+recorded as subscription with no cost; a signed-out Claude Code reaches `NEEDS_HUMAN` with `cli_auth`
+before any prompt is sent and keeps its mode; a Codex usage limit reaches `NEEDS_HUMAN` with
+`usage_limit`, no retry, and no mode change; and schema-invalid CLI output reaches `invalid_output`
+with the failing field named. The provider-default test now accepts both CLI modes and still refuses
+every API mode. `pnpm build` completes. `pnpm test:e2e` passes 61 checks (14 database checks skipped
+by design). `pnpm test:e2e:admin` passes all 14 checks, including the CLI modes offered on New article
+and Providers and the Providers page at 375 and 1440 px without overflow; its first run failed once
+in the unrelated no-membership test (the race fixed above) and passed on the rerun and after the fix.
+Live, against the owner's subscriptions: the Claude Code probe reports 2.1.275 signed in to a
+subscription; a trivial structured run succeeded with the production arguments; and a real draft
+from `prompts/draft.md`, the style guide, and the projected draft schema returned a 769-word
+explainer in 81 seconds that passed the full `draft-1` Zod contract (one 16:9 hero brief, source keys
+drawn from the packet). The Codex probe reports 0.146.0 signed in with ChatGPT, and `pnpm
+worker:status` with a temporary local environment (removed afterwards) reported both CLIs ready. A
+live Codex prompt was not possible: the ChatGPT account reported "You've hit your usage limit … try
+again at 2:00 PM"; that real message is now a test fixture.
+
+Result: Passed locally, except the live Codex run, which is pending.
+
+Commit/PR: Not committed. The base is `627ebd8` on `origin/main`.
+
+Next action: Run and record the live Codex research run at 14:02, then owner review, commit, and push
+so CI verifies Phase 9 in a clean environment.
 
 ### 2026-09-18 — Phases 6–8 committed; GitHub CI passes
 

@@ -36,6 +36,20 @@ export const workerEnvSchema = z
     PUBLISH_VERIFY_TIMEOUT_MS: boundedInt(15_000, 1_000, 300_000),
     CODEX_BIN: nonEmpty.default("codex"),
     CLAUDE_BIN: nonEmpty.default("claude"),
+    // Optional overrides for the subscription CLIs (Phase 9). Unset means the CLI's own default.
+    CLAUDE_MODEL: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._:[\]-]{1,100}$/, "CLAUDE_MODEL must be a model alias or name")
+      .optional(),
+    CODEX_MODEL: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._:-]{1,100}$/, "CODEX_MODEL must be a model name")
+      .optional(),
+    CODEX_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
+    /** One CLI stage run, including web research. The lease is renewed while it runs. */
+    CLI_TIMEOUT_MS: boundedInt(1_200_000, 60_000, 3_600_000),
     OPENAI_API_KEY: nonEmpty.optional(),
     ANTHROPIC_API_KEY: nonEmpty.optional(),
     GEMINI_API_KEY: nonEmpty.optional(),

@@ -2,6 +2,7 @@ import { ARTIFACT_SCHEMA_VERSIONS, type DraftOutput } from "../contracts/artifac
 import type { ArtifactStore, JobContext } from "../db/artifact-store.js";
 import type { Json } from "../db/database.types.js";
 import { StructuredLogger } from "../logging/logger.js";
+import type { CliAdapterSet } from "../providers/cli/adapters.js";
 import type { PipelineStage, PromptTemplate, RunContext } from "../providers/contract.js";
 import { resolveAdapter } from "../providers/registry.js";
 import type { AuditStageInput } from "../providers/mock/audit.js";
@@ -27,6 +28,8 @@ export type PipelineDependencies = Readonly<{
   store: ArtifactStore;
   publisher: PublishingService;
   verifier: VerificationService;
+  /** Subscription CLI adapters. Without them, a job in a CLI mode fails as unsupported. */
+  cli?: CliAdapterSet;
   logger?: StructuredLogger;
   now?: () => Date;
 }>;
@@ -87,13 +90,23 @@ function assertImageBriefsCover(draft: DraftOutput, imageCount: number): void {
   }
 }
 
+/**
+ * Whether the queue will retry this failure by itself. Auth and usage-limit failures go to an
+ * editor (`failureOutcome`), so a subscription CLI that is signed out or out of usage is recorded
+ * as not retryable rather than as a pending retry that never comes.
+ */
 function isRetryable(error: unknown): boolean {
   const errorClass = (error as { errorClass?: string } | null)?.errorClass;
-  return errorClass !== "permanent_config" && errorClass !== "invalid_output";
+  return (
+    errorClass !== "permanent_config" &&
+    errorClass !== "invalid_output" &&
+    errorClass !== "auth" &&
+    errorClass !== "usage_limit"
+  );
 }
 
 export function createPipelineHandlers(dependencies: PipelineDependencies): StageHandlers {
-  const { store, publisher, verifier } = dependencies;
+  const { store, publisher, verifier, cli } = dependencies;
   const logger = dependencies.logger ?? new StructuredLogger();
   const now = dependencies.now ?? (() => new Date());
 
@@ -120,6 +133,7 @@ export function createPipelineHandlers(dependencies: PipelineDependencies): Stag
     const adapter = resolveAdapter(
       stage as "research" | "draft" | "revision" | "images" | "audit",
       runContext.mode,
+      cli,
     ) as unknown as {
       prepare(
         input: TInput,

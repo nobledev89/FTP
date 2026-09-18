@@ -5,6 +5,7 @@ import { Cell, Table, TableHead, TableRow } from "@/components/admin/data-table"
 import { EmptyState, Notice, Panel } from "@/components/admin/panel";
 import { ProviderSettingForm } from "@/components/admin/provider-setting-form";
 import { StatusBadge } from "@/components/admin/status-badge";
+import { cliCapabilities, cliStateDisplay } from "@/lib/admin/cli-capability";
 import { listProviderSettings, listWorkerInstances } from "@/lib/admin/configuration";
 import { formatDateTime, formatRelativeTime } from "@/lib/admin/format";
 import { isBillableMode, providerModeLabel, stageLabel } from "@/lib/admin/status-display";
@@ -24,9 +25,10 @@ const MODE_NOTES: Readonly<Record<string, string>> = {
   manual_chatgpt: "You paste the prompt into ChatGPT and paste the result back. Subscription.",
   manual_claude: "You paste the prompt into Claude and paste the result back. Subscription.",
   manual_gemini: "You generate the image in Gemini and upload it. Subscription.",
-  codex_cli: "Runs the Codex CLI on the worker PC using its existing sign-in. Subscription.",
+  codex_cli:
+    "Runs Codex on the worker PC with its ChatGPT sign-in. Research gets live web search; audit gets none. Subscription.",
   claude_code:
-    "Runs the Claude Code CLI on the worker PC using its existing sign-in. Subscription.",
+    "Runs Claude Code on the worker PC with its Claude sign-in, with no tools. Subscription.",
   openai_api: "Metered OpenAI API calls. Billed per request.",
   anthropic_api: "Metered Anthropic API calls. Billed per request.",
   gemini_api: "Metered Gemini API calls. Billed per request.",
@@ -49,8 +51,10 @@ export default async function ProvidersPage() {
         <Notice tone="info">
           Providers run on the owner&rsquo;s PC, never in this application: the publication has no
           inbound connection to it and holds no provider credentials. Manual modes prepare a prompt
-          on the worker and wait here without holding a queue lease. CLI and API choices remain
-          unavailable until their adapters and safety checks are implemented.
+          on the worker and wait here without holding a queue lease. CLI modes use the sign-in on
+          that PC and are refused if it is missing, signed out, or a billable API account; a usage
+          limit waits for an editor and is never passed to an API. API modes remain unavailable
+          until their adapters and cost confirmation are implemented.
         </Notice>
 
         {billable.length > 0 ? (
@@ -161,6 +165,50 @@ export default async function ProvidersPage() {
                     </Cell>
                   </TableRow>
                 ))}
+              </tbody>
+            </Table>
+          )}
+        </Panel>
+
+        <Panel
+          description="As each worker last reported them. A stage run checks again before it sends a prompt."
+          flush
+          title="Subscription CLIs"
+        >
+          {workers.length === 0 ? (
+            <div className="p-4">
+              <EmptyState>No worker has reported its Claude Code or Codex sign-in yet.</EmptyState>
+            </div>
+          ) : (
+            <Table minWidth="44rem">
+              <TableHead columns={["Worker", "CLI", "Version", "State", "Detail", "Checked"]} />
+              <tbody>
+                {workers.flatMap((worker) =>
+                  cliCapabilities(worker.health).map((capability) => {
+                    const display = cliStateDisplay(capability.state);
+                    return (
+                      <TableRow key={`${worker.worker_id}:${capability.mode}`}>
+                        <Cell variant="mono">{worker.worker_id}</Cell>
+                        <Cell variant="strong">{providerModeLabel(capability.mode)}</Cell>
+                        <Cell variant="mono">{capability.version ?? "—"}</Cell>
+                        <Cell nowrap>
+                          <StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+                        </Cell>
+                        <Cell variant="muted">
+                          {capability.problem ??
+                            (capability.state === "ready"
+                              ? "Signed in to a subscription."
+                              : capability.state === "unknown"
+                                ? "This worker has not reported the CLI."
+                                : "—")}
+                        </Cell>
+                        <Cell nowrap variant="mono">
+                          {capability.checkedAt ? formatRelativeTime(capability.checkedAt) : "—"}
+                        </Cell>
+                      </TableRow>
+                    );
+                  }),
+                )}
               </tbody>
             </Table>
           )}

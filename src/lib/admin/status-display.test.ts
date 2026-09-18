@@ -76,7 +76,7 @@ describe("vocabulary", () => {
 
   it("names provider modes and action kinds in plain words", () => {
     expect(providerModeLabel("codex_cli")).toBe("Codex CLI");
-    expect(actionRequiredLabel("cli_auth")).toBe("CLI sign-in expired");
+    expect(actionRequiredLabel("cli_auth")).toBe("CLI sign-in needed");
   });
 
   it("maps worker health to a tone", () => {

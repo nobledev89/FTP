@@ -54,6 +54,8 @@ type RunnerOptions = {
   now?: () => Date;
   random?: () => number;
   leaseRenewIntervalMs?: number;
+  /** Extra heartbeat detail, such as the subscription CLIs' capability probes. */
+  providerHealth?: () => Record<string, Json>;
 };
 
 export class WorkerRunner {
@@ -65,6 +67,7 @@ export class WorkerRunner {
   private readonly random: () => number;
   private readonly startedAt: string;
   private readonly leaseRenewIntervalMs: number;
+  private readonly providerHealth: (() => Record<string, Json>) | undefined;
 
   constructor(options: RunnerOptions) {
     this.env = options.env;
@@ -76,6 +79,7 @@ export class WorkerRunner {
     this.now = options.now ?? (() => new Date());
     this.random = options.random ?? Math.random;
     this.startedAt = this.now().toISOString();
+    this.providerHealth = options.providerHealth;
     this.leaseRenewIntervalMs =
       options.leaseRenewIntervalMs ??
       Math.max(
@@ -276,6 +280,7 @@ export class WorkerRunner {
         pid: process.pid,
         node: process.version,
         supported_stages: [...this.supportedStages],
+        ...(this.providerHealth ? { providers: this.providerHealth() } : {}),
       },
     };
   }

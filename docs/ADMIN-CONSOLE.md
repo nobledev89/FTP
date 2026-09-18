@@ -29,7 +29,7 @@ offers a sign-out. It sees exactly what an anonymous visitor sees.
 | `/admin/articles/new`     | Create a job: brief, publication intent, and per-stage provider modes                              |
 | `/admin/articles/[jobId]` | One job: every artifact version, provider run, publishing log, the full timeline, and the controls |
 | `/admin/prompts`          | Prompt template versions and a preview of any one of them                                          |
-| `/admin/providers`        | The mode each stage runs in, what it costs, and which workers have reported in                     |
+| `/admin/providers`        | The mode each stage runs in, what it costs, which workers have reported in, and their CLI sign-ins |
 | `/admin/logs`             | Provider runs, publishing and verification, and job events, filterable and paginated               |
 | `/admin/settings`         | Publication identity, editorial and SEO defaults, worker thresholds                                |
 
@@ -107,8 +107,20 @@ expected JSON.
 Every import is one database transaction that re-checks the editor, stores the versioned artifact,
 closes the run, and advances the job, so the history shows the accepted artifact against the prompt
 that produced it. `/admin/providers` sets each stage's default for new jobs; only modes with a worker
-adapter are offered there and on the new-article form. The seeded writing default (Claude Code) has
-no adapter until Phase 9, so new jobs must pick a writing mode explicitly until then.
+adapter are offered there and on the new-article form.
+
+## Subscription CLI modes
+
+Claude Code (`claude_code`, writing and revision) and Codex (`codex_cli`, research and audit) run on
+the worker PC with its own sign-ins; setup and isolation are in [PROVIDERS.md](PROVIDERS.md). Nothing
+waits in the console: the worker runs the stage and moves the job on. The **Subscription CLIs** panel
+on `/admin/providers` shows, per worker, whether each CLI is ready, needs signing in, is signed in to
+a billable account, is not installed, or needs an update, as of the worker's last probe.
+
+When a CLI cannot run, the job goes to `NEEDS_HUMAN` with the worker's message — for example "CLI
+sign-in needed: … Run `claude auth login` …" or "Provider usage limit: … no API was used …". Fix the
+cause on the PC, then resolve the job back to the stage's pending status from the article page. The
+job keeps its CLI mode; the console never offers to switch it to an API.
 
 ## Not in this phase
 
@@ -116,7 +128,7 @@ no adapter until Phase 9, so new jobs must pick a writing mode explicitly until 
   plus an atomic decision about invalidating images and forcing re-audit. It stays deferred rather
   than inserting an unconstrained version that an old approval could accidentally publish; a
   correction today goes through escalation and a revision or a fresh manual draft.
-- **CLI and API provider modes** arrive with their adapters in Phases 9 and 10.
+- **API provider modes** arrive with their adapters and cost confirmation in Phase 10.
 - **Managing memberships** is a SQL-editor task in version 1.
 
 ## Adding a screen

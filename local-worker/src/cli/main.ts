@@ -4,6 +4,8 @@ import { ArtifactStore } from "../db/artifact-store.js";
 import { createWorkerClient, SupabaseWorkerStore } from "../db/worker-store.js";
 import { StructuredLogger } from "../logging/logger.js";
 import { createPipelineHandlers } from "../pipeline/handlers.js";
+import { createCliAdapters } from "../providers/cli/adapters.js";
+import { CliCapabilityMonitor } from "../providers/cli/capabilities.js";
 import { PublishingService } from "../publishing/publish.js";
 import { CacheRevalidationClient } from "../publishing/revalidate.js";
 import { WorkerRunner } from "../queue/runner.js";
@@ -37,6 +39,21 @@ async function main(): Promise<number> {
   const client = createWorkerClient(env);
   const store = new SupabaseWorkerStore(client);
   const artifacts = new ArtifactStore(client);
+  // The subscription CLIs receive an allowlisted environment built from this process's, never the
+  // process environment itself, which holds the service-role key loaded from `.env.local`.
+  const cli = createCliAdapters({
+    claude: {
+      bin: env.CLAUDE_BIN,
+      ...(env.CLAUDE_MODEL ? { model: env.CLAUDE_MODEL } : {}),
+    },
+    codex: {
+      bin: env.CODEX_BIN,
+      ...(env.CODEX_MODEL ? { model: env.CODEX_MODEL } : {}),
+      ...(env.CODEX_REASONING_EFFORT ? { reasoningEffort: env.CODEX_REASONING_EFFORT } : {}),
+    },
+    runtime: { timeoutMs: env.CLI_TIMEOUT_MS },
+  });
+  const capabilities = new CliCapabilityMonitor(cli.clis);
   const handlers = createPipelineHandlers({
     store: artifacts,
     publisher: new PublishingService(
@@ -52,18 +69,33 @@ async function main(): Promise<number> {
       publicSiteUrl: env.PUBLIC_SITE_URL,
       timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
     }),
+    cli,
     logger,
   });
-  const runner = new WorkerRunner({ env, store, handlers, logger });
+  const runner = new WorkerRunner({
+    env,
+    store,
+    handlers,
+    logger,
+    providerHealth: () => capabilities.health(),
+  });
 
   try {
+    // Probing never sends a prompt: version, supported options, and the CLI's own sign-in report.
+    const probes = await capabilities.refresh();
+    for (const probe of probes) {
+      const detail = { mode: probe.mode, version: probe.version, account: probe.account };
+      if (probe.ready) logger.info("provider.cli_ready", detail);
+      else logger.warn("provider.cli_unavailable", { ...detail, problem: probe.problem });
+    }
+
     if (command === "status") {
       const report = buildStatusReport(
         await store.status(env.WORKER_ID),
         env,
         runner.supportedStages,
       );
-      logger.info("worker.status", { report });
+      logger.info("worker.status", { report, providers: capabilities.health() });
       return report.ok ? 0 : 3;
     }
 
@@ -77,6 +109,7 @@ async function main(): Promise<number> {
         );
         logger.info("worker.once_finished", { result: result.state, job_id: result.claim?.jobId });
       } else {
+        capabilities.start();
         await withShutdownDeadline(
           runner.run(shutdown.signal),
           shutdown.signal,
@@ -85,6 +118,7 @@ async function main(): Promise<number> {
       }
       return 0;
     } finally {
+      capabilities.stop();
       shutdown.dispose();
     }
   } catch (error) {

@@ -25,6 +25,8 @@ Implementation progress, verification evidence, blockers, and the next action ar
 - Docker Desktop (for the local Supabase stack, from Phase 2)
 - Playwright Chromium for `pnpm test:e2e`: `pnpm exec playwright install chromium`
 - Git with access to `git@github.com:nobledev89/FTP.git`
+- On the worker PC only, for the subscription CLI modes: Claude Code and Codex, signed in with the
+  subscription accounts (see [docs/PROVIDERS.md](docs/PROVIDERS.md))
 
 You do not need to install Node 24. pnpm downloads the pinned runtime (`24.21.0`) automatically; see
 [ADR 0005](docs/decisions/0005-project-local-node-runtime.md). Run every tool through `pnpm`.
@@ -83,10 +85,11 @@ Then sign in at <http://localhost:3000/admin/login>. See
 | `pnpm format` / `pnpm format:check` | Prettier                                                              |
 
 Worker setup and operational behaviour are documented in
-[docs/LOCAL-WORKER.md](docs/LOCAL-WORKER.md). The worker runs deterministic mock provider stages and
+[docs/LOCAL-WORKER.md](docs/LOCAL-WORKER.md). The worker runs deterministic mock provider stages,
 the manual ChatGPT, Claude, and Gemini handoffs (continued from the admin console; see
-[docs/ADMIN-CONSOLE.md](docs/ADMIN-CONSOLE.md)), plus the internal publishing and verification
-services. Later phases add CLI and API adapters without changing the artifact or queue contracts.
+[docs/ADMIN-CONSOLE.md](docs/ADMIN-CONSOLE.md)), Claude Code and Codex on the owner's subscriptions
+(see [docs/PROVIDERS.md](docs/PROVIDERS.md)), and the internal publishing and verification services.
+Phase 10 adds optional API adapters without changing the artifact or queue contracts.
 
 ## Documentation
 
@@ -97,6 +100,7 @@ services. Later phases add CLI and API adapters without changing the artifact or
 - [Admin console](docs/ADMIN-CONSOLE.md)
 - [State machine](docs/STATE-MACHINE.md)
 - [Local worker](docs/LOCAL-WORKER.md)
+- [Providers](docs/PROVIDERS.md)
 - [Public publication](docs/PUBLICATION.md)
 - [Hermes and Windows scheduling](docs/HERMES.md)
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)

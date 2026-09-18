@@ -66,10 +66,13 @@ describe("manual provider adapters", () => {
   });
 
   it("advertises only working modes and never falls back to another provider", () => {
-    expect(implementedModes("research")).toEqual(["mock", "manual_chatgpt"]);
-    expect(implementedModes("draft")).toEqual(["mock", "manual_claude"]);
+    expect(implementedModes("research")).toEqual(["mock", "manual_chatgpt", "codex_cli"]);
+    expect(implementedModes("draft")).toEqual(["mock", "manual_claude", "claude_code"]);
     expect(implementedModes("images")).toEqual(["mock", "manual_gemini"]);
+    // A CLI mode resolves only when the worker supplies configured CLI adapters, and an API mode
+    // not at all yet: neither is ever substituted by another mode.
     expect(() => resolveAdapter("draft", "claude_code")).toThrow(UnsupportedModeError);
+    expect(() => resolveAdapter("research", "openai_api")).toThrow(UnsupportedModeError);
     expect(() => resolveAdapter("audit", "manual_claude")).toThrow(UnsupportedModeError);
   });
 });

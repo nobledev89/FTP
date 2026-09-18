@@ -1,13 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { ArtifactStore } from "../../local-worker/src/db/artifact-store.js";
 import type { Database as WorkerDatabase } from "../../local-worker/src/db/database.types.js";
 import { createWorkerClient, SupabaseWorkerStore } from "../../local-worker/src/db/worker-store.js";
 import { StructuredLogger } from "../../local-worker/src/logging/logger.js";
 import { createPipelineHandlers } from "../../local-worker/src/pipeline/handlers.js";
+import {
+  createCliAdapters,
+  type CliAdapterSet,
+} from "../../local-worker/src/providers/cli/adapters.js";
+import {
+  createFakeCli,
+  type FakeCli,
+  type FakeCliScenario,
+} from "../../local-worker/src/providers/cli/testing/fake-cli.js";
 import type { RunContext } from "../../local-worker/src/providers/contract.js";
 import { buildAudit } from "../../local-worker/src/providers/mock/audit.js";
 import { buildDraft } from "../../local-worker/src/providers/mock/draft.js";
@@ -60,10 +72,14 @@ function workerEnv(maxAttempts = 5): WorkerEnv {
     PUBLISH_VERIFY_TIMEOUT_MS: 5_000,
     CODEX_BIN: "codex",
     CLAUDE_BIN: "claude",
+    CLI_TIMEOUT_MS: 1_200_000,
   };
 }
 
-function pipeline(maxAttempts = 5): {
+function pipeline(
+  maxAttempts = 5,
+  cli?: CliAdapterSet,
+): {
   runner: WorkerRunner;
   client: SupabaseClient<WorkerDatabase>;
 } {
@@ -110,6 +126,7 @@ function pipeline(maxAttempts = 5): {
       timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
       fetchPage,
     }),
+    ...(cli ? { cli } : {}),
     logger: new StructuredLogger({}, { write() {} }),
     now: () => new Date("2026-09-18T09:00:00Z"),
   });
@@ -730,6 +747,218 @@ describe("deterministic mock pipeline", () => {
   });
 });
 
+describe("subscription CLI providers", () => {
+  let directory: string;
+
+  beforeEach(async () => {
+    directory = await mkdtemp(path.join(tmpdir(), "fintechpulse-cli-pipeline-"));
+  });
+
+  afterEach(async () => {
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  /**
+   * Scripted stand-ins for Claude Code and Codex. The worker's real resolver, process runner,
+   * environment allowlist, probes, parsers, stores, and state machine run unchanged; only the
+   * model is replaced. The worker environment deliberately contains the service-role key.
+   */
+  async function fakeClis(
+    claude: FakeCliScenario,
+    codex: FakeCliScenario,
+  ): Promise<{ cli: CliAdapterSet; claudeCli: FakeCli; codexCli: FakeCli }> {
+    const claudeCli = await createFakeCli(path.join(directory, "claude"), claude);
+    const codexCli = await createFakeCli(path.join(directory, "codex"), codex);
+    const cli = createCliAdapters({
+      claude: { bin: claudeCli.bin },
+      codex: { bin: codexCli.bin },
+      runtime: {
+        timeoutMs: 30_000,
+        tempRoot: directory,
+        sourceEnv: { ...process.env, SUPABASE_SERVICE_ROLE_KEY: localSupabase().secretKey },
+      },
+    });
+    return { cli, claudeCli, codexCli };
+  }
+
+  /** Schema-valid provider responses for a job, built with the mock builders. */
+  function responses(jobId: string, topic: string) {
+    const context = (stage: RunContext["stage"]): RunContext => {
+      const base = manualContext(jobId, stage, "mock");
+      return { ...base, brief: { ...base.brief, topic } };
+    };
+    const packet = buildResearchPacket(context("research"));
+    const draft = buildDraft(context("draft"), { packet });
+    const audit = buildAudit(context("audit"), { packet, draft, draftVersion: 1 });
+    return { packet, draft, audit };
+  }
+
+  it("researches and audits with Codex and writes with Claude Code through to VERIFIED", async () => {
+    const topic = "Subscription CLI safeguarding rules";
+    const jobId = await createJob(editor, {
+      topic,
+      imageCount: 1,
+      autoPublish: true,
+      researchMode: "codex_cli",
+      writingMode: "claude_code",
+      auditMode: "codex_cli",
+    });
+    await unwrap(adminAction(editor, jobId, "start"));
+    const { packet, draft, audit } = responses(jobId, topic);
+    const { cli, claudeCli, codexCli } = await fakeClis(
+      { kind: "claude", responses: [{ structured: draft }] },
+      { kind: "codex", responses: [{ message: packet }, { message: audit }] },
+    );
+    const { runner } = pipeline(5, cli);
+
+    await driveTo(runner, jobId, "VERIFIED");
+
+    const runs = await unwrap(
+      editor.client
+        .from("provider_runs")
+        .select("stage, mode, provider, status, usage, cost_amount, prompt_snapshot")
+        .eq("job_id", jobId)
+        .order("created_at"),
+    );
+    expect(runs.map((run) => [run.stage, run.mode, run.provider, run.status])).toEqual([
+      ["research", "codex_cli", "openai", "succeeded"],
+      ["draft", "claude_code", "anthropic", "succeeded"],
+      ["images", "mock", "gemini", "succeeded"],
+      ["audit", "codex_cli", "openai", "succeeded"],
+    ]);
+    for (const run of runs.filter((entry) => entry.mode !== "mock")) {
+      // Subscription runs record usage, never a billed cost.
+      expect(run.usage).toMatchObject({ billing: "subscription" });
+      expect(run.cost_amount).toBeNull();
+    }
+
+    // The artifacts are the normalized provider output, stored exactly as mock output would be.
+    const [drafts, research, audits] = await Promise.all([
+      unwrap(editor.client.from("drafts").select("title, slug, body_markdown").eq("job_id", jobId)),
+      unwrap(editor.client.from("research_packets").select("version").eq("job_id", jobId)),
+      unwrap(editor.client.from("audits").select("verdict").eq("job_id", jobId)),
+    ]);
+    expect(drafts).toEqual([
+      { title: draft.title, slug: draft.slug, body_markdown: draft.bodyMarkdown },
+    ]);
+    expect(research).toHaveLength(1);
+    expect(audits).toEqual([{ verdict: audit.verdict }]);
+
+    // Each CLI received exactly the prompt snapshotted on its run, and none of the worker's secrets.
+    const [researchPrompt, auditPrompt] = await codexCli.promptRuns();
+    const [draftPrompt] = await claudeCli.promptRuns();
+    expect(researchPrompt?.promptLength).toBe(runs[0]?.prompt_snapshot?.length);
+    expect(draftPrompt?.promptLength).toBe(runs[1]?.prompt_snapshot?.length);
+    expect(auditPrompt?.promptLength).toBe(runs[3]?.prompt_snapshot?.length);
+    for (const invocation of [
+      ...(await claudeCli.invocations()),
+      ...(await codexCli.invocations()),
+    ]) {
+      expect(invocation.envKeys).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    }
+  });
+
+  it("sends a signed-out Claude Code to an editor before any prompt, with no fallback", async () => {
+    const topic = "Signed-out writing CLI";
+    const jobId = await createJob(editor, {
+      topic,
+      researchMode: "codex_cli",
+      writingMode: "claude_code",
+    });
+    await unwrap(adminAction(editor, jobId, "start"));
+    const { packet, draft } = responses(jobId, topic);
+    const { cli, claudeCli } = await fakeClis(
+      {
+        kind: "claude",
+        auth: { loggedIn: false, authMethod: "none", apiProvider: "firstParty" },
+        responses: [{ structured: draft }],
+      },
+      { kind: "codex", responses: [{ message: packet }] },
+    );
+    const { runner } = pipeline(5, cli);
+
+    await expect(runner.runOnce()).resolves.toMatchObject({ state: "completed" });
+    await expect(runner.runOnce()).resolves.toMatchObject({ state: "needs_human" });
+
+    const job = await jobRow(jobId);
+    expect(job).toMatchObject({
+      status: "NEEDS_HUMAN",
+      needs_human_stage: "draft",
+      action_required_kind: "cli_auth",
+      writing_mode: "claude_code",
+      lease_token: null,
+    });
+    expect(job.action_required_message).toMatch(/claude auth login/);
+    const runs = await unwrap(
+      editor.client
+        .from("provider_runs")
+        .select("stage, mode, status, error_class, retryable")
+        .eq("job_id", jobId)
+        .eq("stage", "draft"),
+    );
+    expect(runs).toEqual([
+      {
+        stage: "draft",
+        mode: "claude_code",
+        status: "failed",
+        error_class: "auth",
+        retryable: false,
+      },
+    ]);
+    expect(await unwrap(editor.client.from("drafts").select("id").eq("job_id", jobId))).toEqual([]);
+    expect(await claudeCli.promptRuns()).toHaveLength(0);
+  });
+
+  it("holds a Codex usage limit for an editor instead of retrying or switching provider", async () => {
+    const jobId = await createJob(editor, {
+      topic: "Usage-limited research CLI",
+      researchMode: "codex_cli",
+    });
+    await unwrap(adminAction(editor, jobId, "start"));
+    const { cli, codexCli } = await fakeClis(
+      { kind: "claude", responses: [] },
+      {
+        kind: "codex",
+        responses: [{ fail: "You have hit your usage limit. Try again at 2:00 PM." }],
+      },
+    );
+    const { runner } = pipeline(5, cli);
+
+    await expect(runner.runOnce()).resolves.toMatchObject({ state: "needs_human" });
+    const job = await jobRow(jobId);
+    expect(job).toMatchObject({
+      status: "NEEDS_HUMAN",
+      needs_human_stage: "research",
+      action_required_kind: "usage_limit",
+      research_mode: "codex_cli",
+      next_attempt_at: null,
+    });
+    expect(job.action_required_message).toMatch(/no API was used/);
+    expect(await codexCli.promptRuns()).toHaveLength(1);
+    await expect(runner.runOnce()).resolves.toMatchObject({ state: "idle" });
+  });
+
+  it("escalates CLI output that fails the artifact schema as invalid output", async () => {
+    const topic = "Malformed CLI draft";
+    const jobId = await createJob(editor, { topic, writingMode: "claude_code" });
+    await unwrap(adminAction(editor, jobId, "start"));
+    const { draft } = responses(jobId, topic);
+    const { cli } = await fakeClis(
+      { kind: "claude", responses: [{ structured: { ...draft, slug: "Not A Slug" } }] },
+      { kind: "codex", responses: [] },
+    );
+    const { runner } = pipeline(5, cli);
+
+    await driveTo(runner, jobId, "NEEDS_HUMAN");
+    const job = await jobRow(jobId);
+    expect(job).toMatchObject({
+      needs_human_stage: "draft",
+      action_required_kind: "invalid_output",
+    });
+    expect(job.action_required_message).toMatch(/does not match draft-1/);
+  });
+});
+
 describe("prompt versions", () => {
   it("seeds all six templates and supports immutable edit, activation, and rollback", async () => {
     const seedKeys = ["editorial-style", "research", "draft", "image-brief", "audit", "revise"];
@@ -798,11 +1027,36 @@ describe("prompt versions", () => {
       { updated_stage: "revision", updated_mode: "manual_claude" },
     ]);
 
-    const unsupported = await editor.client.rpc("admin_update_provider_setting", {
-      p_stage: "draft",
-      p_mode: "claude_code",
-    });
-    expect(unsupported.error?.code).toBe("22023");
+    // Phase 9: the subscription CLIs are selectable; API modes wait for Phase 10.
+    const codex = await unwrap(
+      editor.client.rpc("admin_update_provider_setting", {
+        p_stage: "research",
+        p_mode: "codex_cli",
+      }),
+    );
+    expect(codex).toEqual([{ updated_stage: "research", updated_mode: "codex_cli" }]);
+    const claude = await unwrap(
+      editor.client.rpc("admin_update_provider_setting", {
+        p_stage: "draft",
+        p_mode: "claude_code",
+      }),
+    );
+    expect(claude).toEqual([
+      { updated_stage: "draft", updated_mode: "claude_code" },
+      { updated_stage: "revision", updated_mode: "claude_code" },
+    ]);
+    for (const [stage, mode] of [
+      ["research", "openai_api"],
+      ["draft", "anthropic_api"],
+      ["images", "gemini_api"],
+      ["images", "codex_cli"],
+    ] as const) {
+      const unsupported = await editor.client.rpc("admin_update_provider_setting", {
+        p_stage: stage,
+        p_mode: mode,
+      });
+      expect(unsupported.error?.code).toBe("22023");
+    }
     const denied = await viewer.client.rpc("admin_update_provider_setting", {
       p_stage: "research",
       p_mode: "manual_chatgpt",
@@ -810,8 +1064,8 @@ describe("prompt versions", () => {
     expect(denied.error?.code).toBe("42501");
     const restored = await serviceClient()
       .from("provider_settings")
-      .update({ mode: "claude_code" })
-      .in("stage", ["draft", "revision"]);
+      .update({ mode: "manual_chatgpt" })
+      .eq("stage", "research");
     expect(restored.error).toBeNull();
   });
 });

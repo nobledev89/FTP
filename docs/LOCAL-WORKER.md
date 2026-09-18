@@ -18,6 +18,11 @@ The optional `WORKER_HOST_LABEL` is uploaded to the admin dashboard. It defaults
 worker deliberately does not upload the Windows hostname. Optional AI keys are not required until a
 stage is explicitly configured for its API mode.
 
+For the subscription CLI modes, install Claude Code and Codex on the same PC and sign both in with
+the subscription accounts (`claude auth login`, `codex login` with ChatGPT). Setup, isolation, and
+failure handling are in [PROVIDERS.md](PROVIDERS.md). `pnpm worker:status` reports whether each CLI
+is installed, supported, and signed in to a subscription.
+
 ## Commands
 
 | Command              | Behaviour                                                                                               |
@@ -27,13 +32,19 @@ stage is explicitly configured for its API mode.
 | `pnpm worker:status` | Read configuration-safe heartbeat and exact queue health without claiming, recovering, or changing jobs |
 
 The worker registers research, draft, image, audit, revision, publish, and verify handlers. Provider
-stages implement `mock` and the manual subscription modes (`manual_chatgpt` for research and audit,
-`manual_claude` for writing and revision, `manual_gemini` for images); publication and verification
-use the internal services. A manual stage prepares and snapshots the exact prompt, releases its
-lease, and waits for an editor to paste or upload the response in the console, so a manual job never
-holds the worker. A job configured for a later CLI or API adapter is rejected as a permanent
-configuration error rather than silently falling back to a mock or billable provider; the console
-offers only the implemented modes.
+stages implement `mock`, the manual subscription modes (`manual_chatgpt` for research and audit,
+`manual_claude` for writing and revision, `manual_gemini` for images), and the subscription CLI
+modes (`codex_cli` for research and audit, `claude_code` for writing and revision); publication and
+verification use the internal services. A manual stage prepares and snapshots the exact prompt,
+releases its lease, and waits for an editor to paste or upload the response in the console, so a
+manual job never holds the worker. A CLI stage runs the CLI on this PC while holding and renewing its
+lease. A job configured for an API adapter (Phase 10) is rejected as a permanent configuration error
+rather than silently falling back to a mock or billable provider; the console offers only the
+implemented modes.
+
+At start-up (and every ten minutes under `worker:start`) the worker probes both CLIs — version,
+supported options, and sign-in, never a prompt — and includes the result in its heartbeat, where the
+console's Providers page shows it. Each CLI stage probes again immediately before it sends a prompt.
 
 Each provider run's idempotency key is `job:stage:cycle:attempt:claim-version`. The claim version (the
 job's `lock_version` at claim) keeps a stage that an admin retried or resolved, which resets the
@@ -86,7 +97,9 @@ Exit codes are stable shell contracts:
 - Auth, usage-limit, and invalid-output failures require human action. Permanent configuration
   failures stop; transient, rate-limit, and unknown failures use jittered exponential backoff with
   stage-specific caps. The worker attempt ceiling can be lower than the database job ceiling but
-  never bypasses it.
+  never bypasses it. A missing, signed-out, or API-key-signed-in CLI is an auth failure (console
+  action "CLI sign-in needed"); a subscription usage limit is a usage-limit failure. Neither is
+  retried automatically, and neither is ever handed to an API mode.
 
 ## Logs and status
 
@@ -97,8 +110,8 @@ provider output, environment objects, or process command lines to log fields.
 
 `worker:status` uses the service-role-only `worker_status` RPC. It reports heartbeat age/state,
 current work, configured safe timings, exact queue counts, expired leases, delayed retries, action
-requirements, failures, and counts by status. It does not heartbeat or recover expired work, so a
-health probe cannot alter the queue.
+requirements, failures, and counts by status, plus a fresh probe of each subscription CLI under
+`providers`. It does not heartbeat or recover expired work, so a health probe cannot alter the queue.
 
 ## Manual debugging
 

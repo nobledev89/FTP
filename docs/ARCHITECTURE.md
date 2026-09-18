@@ -87,6 +87,12 @@ signal. Completion/manual-wait settlement is single-use locally and is checked a
 lease token. Transient failures receive jittered stage-specific backoff, while authentication,
 subscription usage limits, and invalid provider output require a human.
 
+Provider stages resolve an adapter from the job's snapshotted mode: mock, manual, or a subscription
+CLI (Claude Code for writing and revision, Codex for research and audit). CLI adapters run the CLI on
+the PC with no shell, an allowlisted environment that never contains the service-role key or an API
+key, and a sign-in probe before every prompt that refuses a billable account
+([ADR 0007](decisions/0007-subscription-cli-process-boundary.md), [PROVIDERS.md](PROVIDERS.md)).
+
 Every cycle heartbeats and recovers expired leases before claiming. `worker:status` is separate and
 read-only, using `worker_status` to observe the heartbeat and exact queue counts without changing
 either. Operational setup is in [LOCAL-WORKER.md](LOCAL-WORKER.md), with Hermes and Task Scheduler

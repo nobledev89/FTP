@@ -1,3 +1,4 @@
+import type { CliAdapterSet } from "./cli/adapters.js";
 import type { PipelineStage, ProviderMode, StageAdapter } from "./contract.js";
 import {
   ManualImagesAdapter,
@@ -19,7 +20,8 @@ import type { AuditOutput, DraftOutput, ResearchPacketOutput } from "../contract
  * The job's mode was snapshotted at creation, so a setting changed mid-flight never switches a
  * running job onto a different provider. A mode with no adapter is a configuration error, not a
  * reason to fall back to another mode: falling back is how a free run silently becomes a billable
- * one (plan section 2, decision 6).
+ * one (plan section 2, decision 6). That includes a subscription CLI that is signed out or over
+ * its usage limit — its adapter reports that to an editor rather than handing the stage to an API.
  */
 
 export class UnsupportedModeError extends Error {
@@ -69,25 +71,38 @@ export const ADAPTER_STAGES: readonly AdapterStage[] = [
   "audit",
 ];
 
+/**
+ * `cli` carries the configured subscription-CLI adapters. The worker CLI always supplies them;
+ * code that runs without them (unit and integration suites for other modes) gets the same refusal
+ * as any other unimplemented mode.
+ */
 export function resolveAdapter<S extends AdapterStage>(
   stage: S,
   mode: ProviderMode,
+  cli?: CliAdapterSet,
 ): AdapterMap[S] {
   if (mode === "mock") return MOCK_ADAPTERS[stage];
   const manual = MANUAL_ADAPTERS[stage];
   if (manual?.mode === mode) return manual as AdapterMap[S];
+  if (cli && stage !== "images") {
+    const adapter = cli[stage as Exclude<AdapterStage, "images">];
+    if (adapter.mode === mode) return adapter as AdapterMap[S];
+  }
   throw new UnsupportedModeError(stage, mode);
 }
 
-/** Modes with a working adapter today. Phases 9 and 10 add CLI and API modes. */
+/**
+ * Modes with a working adapter, mirroring `IMPLEMENTED_MODES` in the web console and the modes
+ * `admin_update_provider_setting` accepts. Phase 10 adds the API modes.
+ */
 export function implementedModes(stage: PipelineStage): readonly ProviderMode[] {
   switch (stage) {
     case "research":
     case "audit":
-      return ["mock", "manual_chatgpt"];
+      return ["mock", "manual_chatgpt", "codex_cli"];
     case "draft":
     case "revision":
-      return ["mock", "manual_claude"];
+      return ["mock", "manual_claude", "claude_code"];
     case "images":
       return ["mock", "manual_gemini"];
     default:

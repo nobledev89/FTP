@@ -131,6 +131,7 @@ function workerRunner(workerId: string): WorkerRunner {
     PUBLISH_VERIFY_TIMEOUT_MS: 10_000,
     CODEX_BIN: "codex",
     CLAUDE_BIN: "claude",
+    CLI_TIMEOUT_MS: 1_200_000,
   };
   const workerClient = createWorkerClient(env);
   const artifacts = new ArtifactStore(workerClient);
@@ -222,12 +223,18 @@ test.describe("authenticated admin console", () => {
     await page.getByLabel("Topic").fill(topic);
     await page.getByLabel("Keywords").fill("payments, uk");
     await page.getByLabel("Image count").fill("0");
-    // The seeded writing default (Claude Code) has no adapter until Phase 9, so it is shown but
-    // cannot be chosen, and the form requires a mode that works.
+    // Phase 9 made the seeded writing default (Claude Code) a working mode, so the publication
+    // default is selectable and the CLI modes are offered; API modes still are not.
     const writing = page.getByLabel("Writing", { exact: true });
-    await expect(writing.locator('option[value="default"]')).toBeDisabled();
-    await expect(writing.locator("option", { hasText: "Claude Code" })).toHaveCount(1);
-    await expect(writing.locator('option[value="claude_code"]')).toHaveCount(0);
+    await expect(writing.locator('option[value="default"]')).toBeEnabled();
+    await expect(writing.locator('option[value="default"]')).toHaveText(
+      "Publication default (Claude Code)",
+    );
+    await expect(writing.locator('option[value="claude_code"]')).toHaveCount(1);
+    await expect(writing.locator('option[value="anthropic_api"]')).toHaveCount(0);
+    const research = page.getByLabel("Research", { exact: true });
+    await expect(research.locator('option[value="codex_cli"]')).toHaveCount(1);
+    await expect(research.locator('option[value="openai_api"]')).toHaveCount(0);
     await writing.selectOption({ label: "Manual Claude" });
     await page.getByRole("button", { name: "Create article job" }).click();
 
@@ -333,8 +340,10 @@ test.describe("authenticated admin console", () => {
     // Every other admin route stays closed while that session exists.
     for (const path of ["/admin", "/admin/logs", `/admin/articles/${jobId}`]) {
       const response = await page.goto(path);
+      // Read the body before anything else: once the page navigates on, the browser discards it.
+      const body = (await response?.text()) ?? "";
       await expect(page).toHaveURL(/\/admin\/no-access$/);
-      expect((await response?.text()) ?? "").not.toContain(topic);
+      expect(body).not.toContain(topic);
     }
   });
 
@@ -488,9 +497,10 @@ test.describe("authenticated admin console", () => {
     await signIn(page, ownerEmail, /\/admin$/);
     await page.goto("/admin/providers");
 
-    // The seeded Claude Code default is shown as it is, not as the first available option.
+    // The seeded Claude Code default is a selectable mode since Phase 9.
     const writing = page.getByLabel("Writing and revision");
     await expect(writing).toHaveValue("claude_code");
+    await expect(writing.locator('option[value="claude_code"]')).toBeEnabled();
     await writing.selectOption("manual_claude");
     await page
       .locator("form")

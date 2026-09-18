@@ -213,6 +213,8 @@ const workerSchema = z
     last_seen_at: timestampSchema,
     current_job_id: uuidSchema.nullable(),
     current_stage: pipelineStageSchema.nullable(),
+    // Parsed field by field where it is shown (`cliCapabilities`); the worker owns its shape.
+    health: z.record(z.string(), z.unknown()),
   })
   .strict();
 
@@ -223,7 +225,7 @@ export async function listWorkerInstances(): Promise<readonly WorkerInstance[]> 
   const { data, error } = await client
     .from("worker_instances")
     .select(
-      "worker_id, host_label, version, started_at, last_seen_at, current_job_id, current_stage",
+      "worker_id, host_label, version, started_at, last_seen_at, current_job_id, current_stage, health",
     )
     .order("last_seen_at", { ascending: false });
   if (error) throw toWorkflowError(error);
