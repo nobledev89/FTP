@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 9 — Subscription CLI providers (`COMPLETE`)         |
-| Current task           | Phase 10 ready: optional API adapters                                 |
-| Last updated           | 2026-09-18 14:28, Asia/Singapore                                  |
+| Current phase          | Phase 10 — Optional API adapters (`COMPLETE`)                        |
+| Current task           | Phase 11 ready: publishing, scheduling, and verification hardening   |
+| Last updated           | 2026-09-18 17:08, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `c84b67b` (Phase 9 subscription CLI providers), queued for the requested push to `origin/main`. |
+| Relevant commit        | `cd51658` (Phase 10 optional API providers), ready for the requested push to `origin/main`. |
 | Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
-| Next action            | Confirm GitHub Actions for the Phase 9 push, then start Phase 10 optional API adapters. |
+| Next action            | Commit and push Phase 10, confirm GitHub Actions, then start Phase 11. |
 
 ## Status legend
 
@@ -37,11 +37,22 @@ This is the authoritative live record of implementation progress. Update it imme
 |     7 | Public publication                                 | `COMPLETE`    |     100% | 2026-09-18 | 278 unit tests, 121 integration tests, 61 signed-out/design browser checks, and 12 authenticated/live-publication checks pass; a real rendered article clears all eight verifier checks. |
 |     8 | Manual provider workflows                          | `COMPLETE`    |     100% | 2026-09-18 | 283 unit tests, 125 integration tests, 61 signed-out/design browser checks, and 14 authenticated checks pass; a job created in the console completes research, writing, a Gemini upload, and audit through manual handoffs and reaches `VERIFIED` with no CLI or API key. |
 |     9 | Subscription CLI providers                         | `COMPLETE`    |     100% | 2026-09-18 | 335 unit tests, 129 integration tests, 61 signed-out/design and 14 authenticated browser checks pass; live Claude Code draft and live Codex research from the production prompts pass the artifact schemas; signed-out and usage-limited CLIs reach an actionable `NEEDS_HUMAN`. |
-|    10 | Optional API adapters                              | `NOT_STARTED` |       0% | —         | —                |
+|    10 | Optional API adapters                              | `COMPLETE`    |     100% | 2026-09-18 | OpenAI, Anthropic, and Gemini adapters share the production prompts/schemas; 344 unit, 130 integration, 61 signed-out/design, and 15 authenticated browser checks pass, including a switched API stage through `VERIFIED`. |
 |    11 | Publishing, scheduling, and verification hardening | `NOT_STARTED` |       0% | —         | —                |
 |    12 | Operations, documentation, and release QA          | `NOT_STARTED` |       0% | —         | —                |
 
 ## Active phase checklist
+
+### Phase 10 — Optional API adapters
+
+- [x] Add credential-gated OpenAI research/audit and Anthropic draft/revision adapters using the
+      existing prompts and normalized Zod schemas.
+- [x] Add credential-gated Gemini image generation with the existing slot contracts and image
+      artifact lifecycle.
+- [x] Persist provider usage metadata, classify/redact API failures, and prove no automatic fallback.
+- [x] Require a clear metered-cost warning and explicit confirmation before enabling an API mode.
+- [x] Exercise a switched API stage through the production queue boundary with mocked HTTP responses.
+- [x] Run the complete database, type, unit, build, and browser verification gate.
 
 ### Phase 9 — Subscription CLI providers
 
@@ -280,6 +291,54 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-18 — Phase 10 optional API adapters complete
+
+Date/time: 2026-09-18 17:08, Asia/Singapore
+
+Phase/task: Phase 10 — credential-gated API execution, metered usage records, and explicit billing
+confirmation
+
+Status change: Phase 10 `IN_PROGRESS` (85%) → `COMPLETE`. Current task moves to Phase 11.
+
+What changed: Added bounded, cancellable HTTP adapters for OpenAI Responses research/audit,
+Anthropic Messages draft/revision, and Gemini image generation. Each adapter reuses the production
+prompt builder and the same Zod normalization contract as mock, manual, and CLI modes. Research alone
+gets OpenAI web search; Gemini runs once per image slot, validates supported image bytes and
+dimensions, hashes them, and hands them to the existing private artifact store. Provider/model,
+response IDs, token/cache/tool counts, request counts, and `billing: "metered_api"` are stored as run
+usage; mutable provider list prices are deliberately not converted into a monetary cost. HTTP
+failures use the existing auth, usage-limit, rate-limit, transient, invalid-output, and configuration
+classes, with response caps and centralized redaction. The worker boots without optional keys in
+free modes, validates keys for API providers selected at startup, and refuses a dynamically selected
+mode without its key rather than falling back. Added a migration and admin flow that require a
+metered-cost checkbox, store the confirming editor/time, keep draft/revision aligned, and clear the
+confirmation on a free mode. Updated environment and operator documentation.
+
+Files/migrations affected: `local-worker/src/providers/api/**`, the provider registry, pipeline,
+worker configuration/startup, image store, manual image prompt helper, provider admin action/form,
+provider pages/mode allowlists, `20260918150000_api_provider_modes.sql`, generated database types,
+API unit/integration/browser tests, `.env.example`, README, and provider/worker/admin/Supabase/
+architecture documentation.
+
+Verification performed: A fresh `pnpm supabase:reset` applied all twelve migrations and seed;
+`pnpm db:lint` returned no warnings; `pnpm db:types` regenerated both clients with no drift.
+`pnpm format:check`, `pnpm lint`, `pnpm typecheck`, and the Next.js 16.3.5 production build passed.
+`pnpm test` passed 344 tests in 40 files. `pnpm test:integration` passed 130 tests in 8 files,
+including one confirmed OpenAI research stage proceeding through the real queue, artifact, publish,
+and verification boundaries to `VERIFIED` while every other stage stayed mock. `pnpm test:e2e`
+passed 61 signed-out/design checks; `pnpm test:e2e:admin` passed 15 authenticated checks, including
+the required confirmation, recorded identity/timestamp, new-job availability, and clearing consent.
+Provider calls in automated tests use injected HTTP responses, so verification incurred no external
+AI charge. `git diff --check` is clean.
+
+Result: Passed. The Phase 10 exit criterion is met: adding the selected key and confirming one stage
+is sufficient, with no pipeline redesign and no fallback behavior.
+
+Commit/PR: Phase 10 implementation commit `cd51658`; the documentation commit containing this entry
+follows it on `main`.
+
+Next action: Commit and push Phase 10, confirm GitHub Actions, then begin Phase 11 hardening.
 
 ### 2026-09-18 — Phase 9 committed for GitHub CI
 
