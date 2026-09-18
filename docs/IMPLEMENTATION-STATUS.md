@@ -9,11 +9,11 @@ This is the authoritative live record of implementation progress. Update it imme
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 10 — Optional API adapters (`COMPLETE`)                        |
 | Current task           | Phase 11 ready: publishing, scheduling, and verification hardening   |
-| Last updated           | 2026-09-18 17:08, Asia/Singapore                                     |
+| Last updated           | 2026-09-18 17:14, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `cd51658` (Phase 10 optional API providers), ready for the requested push to `origin/main`. |
+| Relevant commit        | `3c13d0c` on `origin/main`; GitHub Actions run `35328011150` passed. |
 | Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
-| Next action            | Commit and push Phase 10, confirm GitHub Actions, then start Phase 11. |
+| Next action            | Start Phase 11 publishing, scheduling, and verification hardening. |
 
 ## Status legend
 
@@ -291,6 +291,32 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-18 — Phase 10 pushed; GitHub CI passes
+
+Date/time: 2026-09-18 17:14, Asia/Singapore
+
+Phase/task: Phase 10 — clean-environment verification after the requested push
+
+Status change: No phase change; Phase 10 remains `COMPLETE`. Its local evidence is now confirmed by
+GitHub Actions, and the current task moves to Phase 11.
+
+What changed: Pushed the Phase 10 implementation commit `cd51658` and completion record `3c13d0c` to
+`origin/main`.
+
+Files/migrations affected: No implementation change in this follow-up; this status entry records the
+remote verification result.
+
+Verification performed: GitHub Actions run `35328011150` on `3c13d0c` completed with all three jobs
+`success`: **Lint, typecheck, test, build**, **Design review (Playwright)**, and **Supabase schema,
+RLS, and queue**. The database job applied the new API-mode migration from a fresh reset and ran the
+integration and authenticated-browser suites in the clean Linux runner.
+
+Result: Passed locally and in GitHub CI.
+
+Commit/PR: `cd51658` and `3c13d0c` on `main`; this documentation-only evidence commit follows them.
+
+Next action: Start Phase 11 publishing, scheduling, and verification hardening.
 
 ### 2026-09-18 — Phase 10 optional API adapters complete
 
