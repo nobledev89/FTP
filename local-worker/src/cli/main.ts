@@ -1,9 +1,14 @@
 import { WorkerConfigError } from "../config/env.js";
 import { loadWorkerEnv } from "../config/load-env.js";
+import { ArtifactStore } from "../db/artifact-store.js";
 import { createWorkerClient, SupabaseWorkerStore } from "../db/worker-store.js";
 import { StructuredLogger } from "../logging/logger.js";
+import { createPipelineHandlers } from "../pipeline/handlers.js";
+import { PublishingService } from "../publishing/publish.js";
+import { CacheRevalidationClient } from "../publishing/revalidate.js";
 import { WorkerRunner } from "../queue/runner.js";
 import { buildStatusReport } from "../status/status.js";
+import { VerificationService } from "../verification/verify.js";
 
 type Command = "once" | "start" | "status";
 
@@ -29,10 +34,27 @@ async function main(): Promise<number> {
   }
 
   const logger = new StructuredLogger({ worker_id: env.WORKER_ID });
-  const store = new SupabaseWorkerStore(createWorkerClient(env));
-  // Phase 6 installs deterministic mock handlers here. An empty registry is deliberate: Phase 5
-  // may recover leases and report health, but it never claims a stage it cannot finish safely.
-  const runner = new WorkerRunner({ env, store, handlers: {}, logger });
+  const client = createWorkerClient(env);
+  const store = new SupabaseWorkerStore(client);
+  const artifacts = new ArtifactStore(client);
+  const handlers = createPipelineHandlers({
+    store: artifacts,
+    publisher: new PublishingService(
+      client,
+      artifacts,
+      new CacheRevalidationClient({
+        publicSiteUrl: env.PUBLIC_SITE_URL,
+        secret: env.REVALIDATION_SECRET,
+        timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
+      }),
+    ),
+    verifier: new VerificationService(client, {
+      publicSiteUrl: env.PUBLIC_SITE_URL,
+      timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
+    }),
+    logger,
+  });
+  const runner = new WorkerRunner({ env, store, handlers, logger });
 
   try {
     if (command === "status") {

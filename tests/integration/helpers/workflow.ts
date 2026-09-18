@@ -81,20 +81,25 @@ type JobOptions = {
   autoPublish?: boolean;
   desiredPublishAt?: string | null;
   topic?: string;
+  keywords?: string[];
+  researchMode?: Enums["provider_mode"];
+  writingMode?: Enums["provider_mode"];
+  imagesMode?: Enums["provider_mode"];
+  auditMode?: Enums["provider_mode"];
 };
 
 export async function createJob(admin: TestUser, options: JobOptions = {}): Promise<string> {
   return unwrap(
     admin.client.rpc("create_article_job", {
       p_topic: options.topic ?? `Integration topic ${randomUUID().slice(0, 8)}`,
-      p_keywords: ["payments", "uk"],
+      p_keywords: options.keywords ?? ["payments", "uk"],
       p_image_count: options.imageCount ?? 0,
       p_auto_publish: options.autoPublish ?? false,
       ...(options.desiredPublishAt ? { p_desired_publish_at: options.desiredPublishAt } : {}),
-      p_research_mode: "mock",
-      p_writing_mode: "mock",
-      p_images_mode: "mock",
-      p_audit_mode: "mock",
+      p_research_mode: options.researchMode ?? "mock",
+      p_writing_mode: options.writingMode ?? "mock",
+      p_images_mode: options.imagesMode ?? "mock",
+      p_audit_mode: options.auditMode ?? "mock",
     }),
   );
 }

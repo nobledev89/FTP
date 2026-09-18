@@ -37,6 +37,9 @@ Migrations run in order:
 | `20260917100500_storage.sql`                 | `article-work` and `article-public` buckets and policies                                                                                                           |
 | `20260917100600_indexes.sql`                 | Queue, lease, dashboard, public list, and timeline indexes                                                                                                         |
 | `20260918100000_admin_console.sql`           | Admin membership helpers, `admin_dashboard`, `admin_update_site_settings`, `admin_update_site_identity`                                                            |
+| `20260918110000_worker_status.sql`           | Read-only worker heartbeat and exact queue-health snapshot                                                                                                         |
+| `20260918120000_mock_pipeline.sql`           | Authorized immutable prompt-version creation, activation, and rollback                                                                                             |
+| `20260918130000_manual_workflows.sql`        | Authorized manual import and image continuation, abandoned-run cancellation, implemented-mode provider defaults                                                    |
 
 Design rules enforced by the database:
 
@@ -57,14 +60,14 @@ Design rules enforced by the database:
 
 ## Access matrix
 
-| Role                            | Tables                                                                    | Functions                                                                       |
-| ------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `anon`                          | Read `sites`; read `articles` and slug aliases that are published and due | None                                                                            |
-| `authenticated` (no membership) | Same as `anon`                                                            | Admin functions reject with `42501`                                             |
-| Admin `viewer`                  | Read every editorial table and all articles                               | `admin_dashboard`; writes reject with `42501`                                   |
-| Admin `editor`                  | Same reads as viewer; no direct writes                                    | Adds `create_article_job`, `admin_transition_job`, `admin_update_site_settings` |
-| Admin `owner`                   | Same reads as editor; no direct writes                                    | Adds `admin_update_site_identity`                                               |
-| `service_role` (worker)         | Full table access, still subject to the state machine and history guards  | Worker functions below                                                          |
+| Role                            | Tables                                                                    | Functions                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `anon`                          | Read `sites`; read `articles` and slug aliases that are published and due | None                                                                                   |
+| `authenticated` (no membership) | Same as `anon`                                                            | Admin functions reject with `42501`                                                    |
+| Admin `viewer`                  | Read every editorial table and all articles                               | `admin_dashboard`; writes reject with `42501`                                          |
+| Admin `editor`                  | Same reads as viewer; no direct writes                                    | Adds job transitions, settings, prompt versions, manual imports, and provider defaults |
+| Admin `owner`                   | Same reads as editor; no direct writes                                    | Adds `admin_update_site_identity`                                                      |
+| `service_role` (worker)         | Full table access, still subject to the state machine and history guards  | Worker functions below                                                                 |
 
 `private.bootstrap_first_owner` cannot be executed by any API role.
 
@@ -119,6 +122,25 @@ and `worker_offline_after_seconds > worker_stale_after_seconds`.
 It deliberately does not expose `canonical_origin`, `locale`, or `currency`: the canonical origin is
 baked into the canonical URL of every published article, so it is a migration decision, not a
 setting. An unknown timezone is rejected with `22023`.
+
+`admin_create_prompt_version(...)` allocates the next immutable version under a per-site/key
+transaction lock and optionally activates it. `admin_activate_prompt_template(template_id)` makes an
+existing version active, which is the rollback operation. Both require editor access; activating an
+`editorial-style` version also updates `site_settings.style_guide_template_id`.
+
+Manual provider continuation (Phase 8, editor or owner). Each call requires the job to be waiting on
+that exact `action_required` run, with no lease and not paused, and runs in one transaction:
+
+| Function                                                                                   | Effect                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `admin_import_manual_result(job_id, run_id, output)`                                       | Stores a research packet (with sources, claims, evidence), draft, revised draft, or audit; finishes the run; completes the stage through `complete_stage_core`     |
+| `admin_import_manual_image(job_id, run_id, slot, metadata, private_path, mime, size, ...)` | Records one uploaded image as `ready` for a requested slot. The object must exist under `jobs/<job id>/` and its stored size and type must match the recorded ones |
+| `admin_complete_manual_images(job_id, run_id)`                                             | Completes `IMAGES_PROCESSING → AUDIT_PENDING` once every requested slot has a ready image from this run (`FT005` otherwise)                                        |
+| `admin_update_provider_setting(stage, mode)`                                               | Changes a stage's default for new jobs. Accepts only modes with a worker adapter; the writing default also sets revision                                           |
+
+A second import of a finished run fails with `FT004`. A draft that does not brief every requested
+image slot fails with `22023`. When a job leaves a manual wait without an import (escalation), the
+`article_jobs_cancel_superseded_manual_run` trigger marks the abandoned run `cancelled`.
 
 ## Error codes
 

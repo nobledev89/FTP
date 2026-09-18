@@ -42,6 +42,10 @@ Open <http://localhost:3000>. Design review fixtures are at `/design-review` and
 (outside Vercel production). Supabase setup, the access model, and hosted-project steps are in
 [docs/SUPABASE.md](docs/SUPABASE.md).
 
+The public home, `/blog` archive, article pages, RSS, sitemap, robots, and social cards read only
+publication-safe Supabase snapshots. Their data/cache contract and signed invalidation protocol are
+documented in [docs/PUBLICATION.md](docs/PUBLICATION.md).
+
 The admin console is at `/admin` and needs an account with an active `admin_users` row. To create
 one against the local stack:
 
@@ -74,11 +78,15 @@ Then sign in at <http://localhost:3000/admin/login>. See
 | `pnpm supabase:reset`               | Rebuild the local database from migrations and seed data              |
 | `pnpm db:lint`                      | `plpgsql_check` over database functions                               |
 | `pnpm db:types`                     | Regenerate database types for the web app and worker                  |
+| `pnpm prompts:seed`                 | Regenerate the SQL seed from the reviewed Markdown prompts            |
+| `pnpm contracts:sync`               | Sync artifact schemas from the web app into the worker package        |
 | `pnpm format` / `pnpm format:check` | Prettier                                                              |
 
 Worker setup and operational behaviour are documented in
-[docs/LOCAL-WORKER.md](docs/LOCAL-WORKER.md). Phase 5 registers no provider handlers, so the worker
-does not claim provider work until the mock pipeline arrives in Phase 6.
+[docs/LOCAL-WORKER.md](docs/LOCAL-WORKER.md). The worker runs deterministic mock provider stages and
+the manual ChatGPT, Claude, and Gemini handoffs (continued from the admin console; see
+[docs/ADMIN-CONSOLE.md](docs/ADMIN-CONSOLE.md)), plus the internal publishing and verification
+services. Later phases add CLI and API adapters without changing the artifact or queue contracts.
 
 ## Documentation
 
@@ -89,6 +97,7 @@ does not claim provider work until the mock pipeline arrives in Phase 6.
 - [Admin console](docs/ADMIN-CONSOLE.md)
 - [State machine](docs/STATE-MACHINE.md)
 - [Local worker](docs/LOCAL-WORKER.md)
+- [Public publication](docs/PUBLICATION.md)
 - [Hermes and Windows scheduling](docs/HERMES.md)
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)

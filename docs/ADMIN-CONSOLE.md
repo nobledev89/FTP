@@ -78,14 +78,45 @@ notes and JSON summaries — is redacted before it reaches a browser: credential
 paths, and email addresses are masked, and long output is truncated. The unredacted text stays in the
 database and in the worker's own log. See `src/lib/admin/redact.ts`.
 
+## Prompt versions
+
+`/admin/prompts` lists every immutable version and loads one body only when it is previewed. An
+editor or owner can save the preview as a new version, either active or inactive. Activating an
+older version is the rollback operation; provider runs keep their original prompt snapshot and
+template version. Viewers can inspect versions but cannot create or activate one. The database
+serializes version allocation per site/key and re-authorizes every write.
+
+## Manual provider workflows
+
+A stage in a manual mode (`manual_chatgpt`, `manual_claude`, `manual_gemini`) waits on the article
+page with no worker lease held. The run panel shows the provider and mode, **Copy prompt**, an
+**Open ChatGPT/Claude/Gemini** link, the exact prompt snapshot the worker stored, and an example of the
+expected JSON.
+
+- **Research, writing, revision, and audit** take a pasted JSON response (one outer ` ```json `
+  fence is accepted). **Validate and continue** checks it against the shared artifact schema; a
+  rejected response stays in the text box with the failing paths listed, and nothing is stored.
+- **Images** take one upload per requested slot with its alt text (required), caption, and optional
+  focal point. The server reads the file's real type and dimensions from its bytes, stores it in the
+  private `article-work` bucket, and records it as `ready`. Uploading a replacement creates a new
+  version. **Continue to audit** is enabled once every requested slot is ready; files become public
+  only when the publishing service copies approved versions.
+- A paused job keeps its prompt on screen but accepts nothing until it is resumed. Escalating a
+  waiting job cancels its run; resolving it later prepares a fresh prompt.
+
+Every import is one database transaction that re-checks the editor, stores the versioned artifact,
+closes the run, and advances the job, so the history shows the accepted artifact against the prompt
+that produced it. `/admin/providers` sets each stage's default for new jobs; only modes with a worker
+adapter are offered there and on the new-article form. The seeded writing default (Claude Code) has
+no adapter until Phase 9, so new jobs must pick a writing mode explicitly until then.
+
 ## Not in this phase
 
 - **Editing a draft** (`/admin/articles/[jobId]/edit`) needs `drafts.origin = 'admin_edit'` writes,
-  which arrive with the mock pipeline in Phase 6.
-- **Activating or rolling back a prompt version** arrives in Phase 6, which is what seeds the
-  templates in the first place.
-- **Changing a stage's provider mode** arrives with the adapters that make the alternatives real,
-  Phases 8 to 10. A new job can already override the mode for its own run.
+  plus an atomic decision about invalidating images and forcing re-audit. It stays deferred rather
+  than inserting an unconstrained version that an old approval could accidentally publish; a
+  correction today goes through escalation and a revision or a fresh manual draft.
+- **CLI and API provider modes** arrive with their adapters in Phases 9 and 10.
 - **Managing memberships** is a SQL-editor task in version 1.
 
 ## Adding a screen

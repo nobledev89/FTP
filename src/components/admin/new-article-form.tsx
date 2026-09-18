@@ -20,6 +20,8 @@ export type StageChoice = Readonly<{
   label: string;
   /** The mode that applies when the form leaves this stage on "publication default". */
   defaultMode: ProviderMode | null;
+  /** False when the publication default has no worker adapter yet; a mode must then be chosen. */
+  defaultAvailable: boolean;
   options: readonly ProviderMode[];
 }>;
 
@@ -200,16 +202,24 @@ export function NewArticleForm({
             <Field htmlFor={stage.field} key={stage.field} label={stage.label}>
               <select
                 className={controlClass}
-                defaultValue="default"
+                defaultValue={stage.defaultAvailable ? "default" : ""}
                 id={stage.field}
                 name={stage.field}
                 onChange={(event) =>
                   setSelected((current) => ({ ...current, [stage.field]: event.target.value }))
                 }
+                required
               >
-                <option value="default">
+                {stage.defaultAvailable ? null : (
+                  <option disabled value="">
+                    Choose a mode
+                  </option>
+                )}
+                <option disabled={!stage.defaultAvailable} value="default">
                   {stage.defaultMode
-                    ? `Publication default (${providerModeLabel(stage.defaultMode)})`
+                    ? `Publication default (${providerModeLabel(stage.defaultMode)})${
+                        stage.defaultAvailable ? "" : ", not available yet"
+                      }`
                     : "Publication default"}
                 </option>
                 {stage.options.map((mode) => (

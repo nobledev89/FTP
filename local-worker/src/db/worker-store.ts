@@ -212,6 +212,9 @@ export class SupabaseWorkerStore implements WorkerStore {
 
 type Result<T> = { data: T; error: { code?: string; message: string } | null };
 
+/** Shared by the artifact, publishing, and verification stores. */
+export { unwrap as unwrapResult };
+
 function unwrap<T>(result: Result<T>, operation: string): NonNullable<T> {
   if (result.error) {
     throw new WorkerDatabaseError(operation, result.error.code, result.error.message, {

@@ -17,9 +17,8 @@ import {
  * Publication configuration reads: site identity, settings, prompt versions, and per-stage provider
  * modes. All four are admin-only selects under RLS.
  *
- * Writes: settings and identity have RPCs from this phase. Prompt activation arrives with Phase 6
- * (which seeds the templates) and provider-mode changes with Phases 8-10 (which add the modes worth
- * switching to); until then those pages are read-only and say so.
+ * Writes: settings, identity, and immutable prompt version activation have authorized RPCs.
+ * Provider-mode changes arrive with Phases 8-10, which add the modes worth switching to.
  */
 
 const siteSchema = z
@@ -153,19 +152,33 @@ export async function listPromptTemplates(
 export async function getPromptTemplateContent(
   siteId: string,
   templateId: string,
-): Promise<Readonly<{ key: string; version: number; content: string }> | null> {
+): Promise<Readonly<{
+  id: string;
+  key: string;
+  version: number;
+  content: string;
+  notes: string | null;
+  isActive: boolean;
+}> | null> {
   if (!uuidSchema.safeParse(templateId).success) return null;
 
   const client = await createSupabaseServerClient();
   const { data, error } = await client
     .from("prompt_templates")
-    .select("key, version, content")
+    .select("id, key, version, content, notes, is_active")
     .eq("site_id", siteId)
     .eq("id", templateId)
     .maybeSingle();
   if (error) throw toWorkflowError(error);
   if (!data) return null;
-  return { key: data.key, version: data.version, content: data.content };
+  return {
+    id: data.id,
+    key: data.key,
+    version: data.version,
+    content: data.content,
+    notes: data.notes,
+    isActive: data.is_active,
+  };
 }
 
 const providerSettingSchema = z

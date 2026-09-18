@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Cell, Table, TableHead, TableRow } from "@/components/admin/data-table";
 import { EmptyState, Notice, Panel } from "@/components/admin/panel";
+import { ProviderSettingForm } from "@/components/admin/provider-setting-form";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { listProviderSettings, listWorkerInstances } from "@/lib/admin/configuration";
 import { formatDateTime, formatRelativeTime } from "@/lib/admin/format";
@@ -47,9 +48,9 @@ export default async function ProvidersPage() {
       <div className="grid gap-4">
         <Notice tone="info">
           Providers run on the owner&rsquo;s PC, never in this application: the publication has no
-          inbound connection to it and holds no provider credentials. Changing a stage&rsquo;s mode
-          arrives with the manual, CLI, and API adapters in Phases 8 to 10; this page reads the
-          modes stored today, and a new job may still override them individually.
+          inbound connection to it and holds no provider credentials. Manual modes prepare a prompt
+          on the worker and wait here without holding a queue lease. CLI and API choices remain
+          unavailable until their adapters and safety checks are implemented.
         </Notice>
 
         {billable.length > 0 ? (
@@ -68,7 +69,23 @@ export default async function ProvidersPage() {
           </Notice>
         )}
 
-        <Panel description="One mode per stage, per publication." flush title="Stage modes">
+        <Panel
+          description="These defaults apply only to newly created jobs; every job keeps its own mode snapshot."
+          title="Editable defaults"
+        >
+          <div className="grid gap-3 lg:grid-cols-2">
+            {(["research", "draft", "images", "audit"] as const).map((stage) => (
+              <ProviderSettingForm
+                canEdit={session.canEdit}
+                currentMode={byStage.get(stage)?.mode ?? "mock"}
+                key={stage}
+                stage={stage}
+              />
+            ))}
+          </div>
+        </Panel>
+
+        <Panel description="One mode per worker stage, per publication." flush title="Stage modes">
           {settings.length === 0 ? (
             <div className="p-4">
               <EmptyState>No provider settings are stored.</EmptyState>

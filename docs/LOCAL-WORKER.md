@@ -26,10 +26,40 @@ stage is explicitly configured for its API mode.
 | `pnpm worker:start`  | Run the same cycle continuously; stop cleanly on `Ctrl+C`, `SIGINT`, `SIGTERM`, or `SIGHUP`             |
 | `pnpm worker:status` | Read configuration-safe heartbeat and exact queue health without claiming, recovering, or changing jobs |
 
-Phase 5 intentionally registers no provider-stage handlers. The commands are operational, but
-`worker:once` and `worker:start` pass an empty stage filter to the atomic claim function and remain
-idle after heartbeat/recovery. Phase 6 installs deterministic mock handlers. This prevents an early
-worker from consuming a job it cannot finish.
+The worker registers research, draft, image, audit, revision, publish, and verify handlers. Provider
+stages implement `mock` and the manual subscription modes (`manual_chatgpt` for research and audit,
+`manual_claude` for writing and revision, `manual_gemini` for images); publication and verification
+use the internal services. A manual stage prepares and snapshots the exact prompt, releases its
+lease, and waits for an editor to paste or upload the response in the console, so a manual job never
+holds the worker. A job configured for a later CLI or API adapter is rejected as a permanent
+configuration error rather than silently falling back to a mock or billable provider; the console
+offers only the implemented modes.
+
+Each provider run's idempotency key is `job:stage:cycle:attempt:claim-version`. The claim version (the
+job's `lock_version` at claim) keeps a stage that an admin retried or resolved, which resets the
+attempt counter, from reopening the finished run of an earlier claim. A draft from any mode must
+brief every requested image slot; one that does not is rejected as `invalid_output`.
+
+Mock jobs can exercise exceptional branches from the article keywords field:
+
+| Keyword                        | Behaviour                                                      |
+| ------------------------------ | -------------------------------------------------------------- |
+| `mock:audit=pass`              | First audit passes (the default)                               |
+| `mock:audit=revision`          | First audit requests revision; the re-audit passes             |
+| `mock:audit=needs_human`       | Audit records a conflict and moves the job to `NEEDS_HUMAN`    |
+| `mock:fail=<stage>`            | Stage fails once, then succeeds on a later attempt             |
+| `mock:fail-always=<stage>`     | Stage fails on every attempt                                   |
+| `mock:manual=<provider-stage>` | Releases the lease and records an action-required provider run |
+| `mock:slow=<milliseconds>`     | Adds a bounded delay for lease, pause, and shutdown testing    |
+
+The mock image stage creates real deterministic PNG bytes, stores them privately, and uses the same
+public-copy service as a future image adapter. After `publish_article` commits, the publishing
+service sends a timestamped, nonce-bound HMAC request to `PUBLIC_SITE_URL/api/revalidate`. A failed
+cache request never rolls back an already published snapshot; the live verifier remains the
+correctness backstop and schedules a bounded retry if the page is not fresh or reachable. Live
+verification fetches the real `/blog/[slug]` page and checks its status, canonical URL, title, body,
+hero, metadata, Article JSON-LD, and placeholder markers before `record_verification` may advance the
+job to `VERIFIED`.
 
 Exit codes are stable shell contracts:
 

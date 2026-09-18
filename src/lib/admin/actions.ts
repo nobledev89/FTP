@@ -9,6 +9,7 @@ import { planAdminTransition, type AdminAction } from "@/lib/state-machine/admin
 import { WorkflowError, toWorkflowError } from "@/lib/state-machine/errors";
 import { createAdminWorkflowService } from "@/lib/state-machine/supabase";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { Database, Json } from "@/lib/supabase/database.types";
 import { zonedLocalToUtcIso } from "@/lib/format/timezone";
 import { siteConfig } from "@/lib/site/config";
 import {
@@ -20,6 +21,9 @@ import {
 } from "@/lib/validation/domain";
 
 import type { ActionResult } from "./action-result";
+import { listProviderSettings } from "./configuration";
+import { IMPLEMENTED_MODES, isImplementedMode, type SelectableStage } from "./provider-modes";
+import { providerModeLabel } from "./status-display";
 
 /**
  * Server Actions for the admin console.
@@ -33,6 +37,8 @@ import type { ActionResult } from "./action-result";
  * A `"use server"` module may export async functions only, so `ActionResult` and its idle value
  * live in `./action-result`.
  */
+
+type ProviderMode = Database["public"]["Enums"]["provider_mode"];
 
 /** Messages for the failure classes an admin can actually act on. */
 function describe(error: unknown): string {
@@ -119,6 +125,37 @@ const createJobSchema = z.object({
   auditMode: providerModeSchema.nullable(),
 });
 
+const MODE_FIELDS = [
+  ["research", "researchMode", "Research"],
+  ["draft", "writingMode", "Writing"],
+  ["images", "imagesMode", "Images"],
+  ["audit", "auditMode", "Audit"],
+] as const satisfies ReadonlyArray<
+  readonly [SelectableStage, "researchMode" | "writingMode" | "imagesMode" | "auditMode", string]
+>;
+
+/**
+ * Resolves each stage's effective mode (the explicit choice, else the publication default) and
+ * describes the first one the worker has no adapter for. Such a job would fail permanently at that
+ * stage, and the worker never substitutes another mode.
+ */
+async function modeWithoutAdapter(
+  siteId: string,
+  chosen: Readonly<Record<(typeof MODE_FIELDS)[number][1], ProviderMode | null>>,
+): Promise<string | null> {
+  const defaults = new Map(
+    (await listProviderSettings(siteId)).map((setting) => [setting.stage, setting.mode]),
+  );
+  for (const [stage, field, label] of MODE_FIELDS) {
+    const mode = chosen[field] ?? defaults.get(stage) ?? "mock";
+    if (!isImplementedMode(stage, mode)) {
+      const available = IMPLEMENTED_MODES[stage].map(providerModeLabel).join(" or ");
+      return `${label}: ${providerModeLabel(mode)} is not available yet. Choose ${available}.`;
+    }
+  }
+  return null;
+}
+
 function readMode(formData: FormData, field: string): string | null {
   const value = formData.get(field);
   if (typeof value !== "string" || value === "" || value === "default") return null;
@@ -131,7 +168,7 @@ export async function createArticleJobAction(
 ): Promise<ActionResult> {
   let jobId: string;
   try {
-    await authorizeAdminAction("write");
+    const session = await authorizeAdminAction("write");
 
     const parsed = createJobSchema.safeParse({
       topic: String(formData.get("topic") ?? ""),
@@ -160,6 +197,9 @@ export async function createArticleJobAction(
         return { ok: false, error: "Enter the desired publish time as a date and time." };
       }
     }
+
+    const unavailable = await modeWithoutAdapter(session.siteId, parsed.data);
+    if (unavailable) return { ok: false, error: unavailable };
 
     const client = await createSupabaseServerClient();
     // Arguments with a SQL default are omitted rather than sent as null: the generated types treat
@@ -333,6 +373,93 @@ export async function jobTransitionAction(
     revalidatePath("/admin");
     revalidatePath(`/admin/articles/${command.jobId}`);
     return { ok: true, message: ACTION_LABELS[command.action] };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Prompt versions
+// ---------------------------------------------------------------------------
+
+const promptVersionSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9-]{1,63}$/, "is not a valid prompt key"),
+  content: z.string().trim().min(1, "is required").max(100_000),
+  notes: optionalText(2000),
+  activate: z.boolean(),
+});
+
+const activatePromptSchema = z.object({ templateId: uuidSchema });
+
+function variablesSchemaFor(content: string): Json {
+  const names = [
+    ...new Set([...content.matchAll(/\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}/g)].map((match) => match[1]!)),
+  ].sort();
+  return {
+    type: "object",
+    properties: Object.fromEntries(names.map((name) => [name, { type: "string" }])),
+    required: names,
+    additionalProperties: false,
+  };
+}
+
+/** Saves an edit as a new immutable version and normally makes it active immediately. */
+export async function createPromptVersionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const parsed = promptVersionSchema.safeParse({
+      key: formData.get("key"),
+      content: String(formData.get("content") ?? ""),
+      notes: String(formData.get("notes") ?? ""),
+      activate: formData.get("activate") === "on",
+    });
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+
+    const client = await createSupabaseServerClient();
+    const { data, error } = await client.rpc("admin_create_prompt_version", {
+      p_key: parsed.data.key,
+      p_content: parsed.data.content,
+      p_notes: parsed.data.notes ?? "",
+      p_variables_schema: variablesSchemaFor(parsed.data.content),
+      p_activate: parsed.data.activate,
+    });
+    if (error) throw error;
+    const version = data[0]?.version;
+    if (!version) throw new WorkflowError("NOT_FOUND", "The prompt version was not created.");
+
+    revalidatePath("/admin/prompts");
+    return {
+      ok: true,
+      message: `Prompt version ${version} saved${parsed.data.activate ? " and activated" : ""}.`,
+    };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+/** Activating an older immutable version is the prompt rollback operation. */
+export async function activatePromptTemplateAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const parsed = activatePromptSchema.safeParse({ templateId: formData.get("templateId") });
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+
+    const client = await createSupabaseServerClient();
+    const { data, error } = await client.rpc("admin_activate_prompt_template", {
+      p_template_id: parsed.data.templateId,
+    });
+    if (error) throw error;
+    const activated = data[0];
+    if (!activated) throw new WorkflowError("NOT_FOUND", "That prompt version no longer exists.");
+
+    revalidatePath("/admin/prompts");
+    return { ok: true, message: `${activated.key} v${activated.version} is active.` };
   } catch (error) {
     return { ok: false, error: describe(error) };
   }

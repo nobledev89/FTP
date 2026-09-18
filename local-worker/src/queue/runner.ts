@@ -12,14 +12,27 @@ import { WorkerStageError, classifyError, errorCode, failureOutcome, retryAt } f
 
 export const WORKER_VERSION = "0.1.0";
 
+export type Settlement = "completed" | "manual_action" | "direct";
+
 export type StageContext = {
   readonly claim: ClaimedJob;
+  /** The worker identity that owns this claim. */
+  readonly workerId: string;
   readonly signal: AbortSignal;
+  /** The provider run this stage opened, so a failure can be linked to it. */
+  readonly providerRunId: string | undefined;
+  noteProviderRun(runId: string): void;
   complete(
     toStatus: ClaimedJob["status"],
     options?: { note?: string; metadata?: Json },
   ): Promise<void>;
   requestManualAction(runId: string, message: string): Promise<void>;
+  /**
+   * For stages whose own database function ends the lease. `publish_article` and
+   * `record_verification` are the publication boundary: they transition the job themselves, so the
+   * stage must not also call `complete_stage`. The lease is still settled exactly once.
+   */
+  settleDirectly<T>(settle: () => Promise<T>): Promise<T>;
 };
 
 export type StageHandler = (context: StageContext) => Promise<void>;
@@ -201,6 +214,7 @@ export class WorkerRunner {
           outcome,
           errorClass,
           summary,
+          ...(context.providerRunId ? { runId: context.providerRunId } : {}),
           ...(outcome === "retry"
             ? {
                 retryAt: retryAt(claim.stage, claim.attempt, errorClass, this.now(), this.random),
@@ -281,15 +295,32 @@ export class WorkerRunner {
 
 class StoreStageContext implements StageContext {
   settled = false;
-  settlement: "completed" | "manual_action" | undefined;
+  settlement: Settlement | undefined;
+  providerRunId: string | undefined;
   private settling = false;
 
   constructor(
     private readonly store: WorkerStore,
-    private readonly workerId: string,
+    readonly workerId: string,
     readonly claim: ClaimedJob,
     readonly signal: AbortSignal,
   ) {}
+
+  noteProviderRun(runId: string): void {
+    this.providerRunId = runId;
+  }
+
+  async settleDirectly<T>(settle: () => Promise<T>): Promise<T> {
+    this.beginSettlement();
+    try {
+      const result = await settle();
+      this.settled = true;
+      this.settlement = "direct";
+      return result;
+    } finally {
+      this.settling = false;
+    }
+  }
 
   async complete(
     toStatus: ClaimedJob["status"],

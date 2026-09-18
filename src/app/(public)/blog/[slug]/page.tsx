@@ -1,0 +1,110 @@
+import type { Metadata } from "next";
+import { notFound, permanentRedirect } from "next/navigation";
+
+import {
+  ArticleHeader,
+  DisclosureNote,
+  RelatedArticles,
+  SourceList,
+} from "@/components/public/article-parts";
+import { ArticleFigure } from "@/components/public/article-image";
+import { Container } from "@/components/public/layout";
+import { SafeMarkdown } from "@/components/public/markdown";
+import { getRelatedPublicArticles, resolvePublicArticle } from "@/lib/publication/repository";
+import { siteConfig } from "@/lib/site/config";
+import { CANONICAL_ORIGIN } from "@/lib/site/config";
+
+export const revalidate = 300;
+
+type ArticlePageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+function jsonLd(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
+  const resolution = await resolvePublicArticle((await params).slug);
+  if (!resolution) {
+    return { title: "Article not found", robots: { index: false, follow: false } };
+  }
+
+  const { article } = resolution;
+  return {
+    title: { absolute: `${article.title} | ${siteConfig.name}` },
+    description: article.metaDescription,
+    alternates: { canonical: article.canonicalUrl },
+    openGraph: {
+      type: "article",
+      url: article.canonicalUrl,
+      title: article.metaTitle,
+      description: article.metaDescription,
+      siteName: siteConfig.name,
+      locale: "en_GB",
+      publishedTime: article.publishedAt,
+      modifiedTime: article.updatedAt ?? undefined,
+      authors: [article.byline.name],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: article.metaTitle,
+      description: article.metaDescription,
+    },
+  };
+}
+
+export default async function ArticlePage({ params }: ArticlePageProps) {
+  const requestedSlug = (await params).slug;
+  const resolution = await resolvePublicArticle(requestedSlug);
+  if (!resolution) notFound();
+  if (resolution.alias) permanentRedirect(`/blog/${resolution.article.slug}`);
+
+  const { article } = resolution;
+  const related = await getRelatedPublicArticles(article);
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": article.articleType === "news" ? "NewsArticle" : "Article",
+    mainEntityOfPage: { "@type": "WebPage", "@id": article.canonicalUrl },
+    headline: article.title,
+    description: article.metaDescription,
+    datePublished: article.publishedAt,
+    dateModified: article.updatedAt ?? article.publishedAt,
+    author: { "@type": "Organization", name: article.byline.name },
+    publisher: { "@type": "Organization", name: siteConfig.name, url: CANONICAL_ORIGIN },
+    ...(article.image ? { image: [article.image.src] } : {}),
+  };
+
+  return (
+    <>
+      <script
+        dangerouslySetInnerHTML={{ __html: jsonLd(structuredData) }}
+        type="application/ld+json"
+      />
+      <Container className="py-14 sm:py-16 lg:py-20" width="article">
+        <article data-article-body="">
+          <ArticleHeader
+            byline={article.byline}
+            category={article.category}
+            excerpt={article.excerpt}
+            publishedAt={article.publishedAt}
+            title={article.title}
+            updatedAt={article.updatedAt}
+          />
+          {article.image ? (
+            <ArticleFigure
+              eager
+              image={article.image}
+              ratio={article.image.aspectRatio === "3:2" ? "hero-3-2" : "hero"}
+              sizes="(min-width: 1024px) 832px, (min-width: 640px) calc(100vw - 3rem), calc(100vw - 2rem)"
+            />
+          ) : null}
+          <SafeMarkdown markdown={article.bodyMarkdown} />
+          <DisclosureNote>{siteConfig.disclosure}</DisclosureNote>
+          <SourceList sources={article.sources} />
+        </article>
+        <RelatedArticles articles={related} />
+      </Container>
+    </>
+  );
+}

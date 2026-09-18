@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Cell, Table, TableHead, TableRow } from "@/components/admin/data-table";
 import { EmptyState, Notice, Panel } from "@/components/admin/panel";
+import { PromptEditor } from "@/components/admin/prompt-editor";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { getPromptTemplateContent, listPromptTemplates } from "@/lib/admin/configuration";
 import { formatCount, formatDateTime } from "@/lib/admin/format";
@@ -37,9 +38,8 @@ export default async function PromptsPage({ searchParams }: PromptsPageProps) {
       <div className="grid gap-4">
         <Notice tone="info">
           Prompt versions are immutable: activation is the only mutable state, and history is never
-          rewritten. Seeding the templates and the editorial style guide, and activating or rolling
-          back a version, arrive with the mock pipeline in Phase 6. This page reads what is stored
-          today.
+          rewritten. Edit a preview to create a version, or activate an older version to roll back.
+          Provider runs retain the exact prompt snapshot they used.
         </Notice>
 
         {keys.length === 0 ? (
@@ -114,9 +114,7 @@ export default async function PromptsPage({ searchParams }: PromptsPageProps) {
             }
             title={`${preview.key} v${preview.version}`}
           >
-            <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-control border border-border bg-canvas p-3 font-mono text-[11px] leading-relaxed">
-              {preview.content}
-            </pre>
+            <PromptEditor canEdit={session.canEdit} template={preview} />
           </Panel>
         ) : null}
       </div>

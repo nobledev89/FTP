@@ -1455,7 +1455,60 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_activate_prompt_template: {
+        Args: { p_template_id: string }
+        Returns: {
+          key: string
+          template_id: string
+          version: number
+        }[]
+      }
+      admin_complete_manual_images: {
+        Args: { p_job_id: string; p_run_id: string }
+        Returns: Database["public"]["Enums"]["job_status"]
+      }
+      admin_create_prompt_version: {
+        Args: {
+          p_activate?: boolean
+          p_content: string
+          p_key: string
+          p_notes?: string
+          p_variables_schema?: Json
+        }
+        Returns: {
+          is_active: boolean
+          template_id: string
+          version: number
+        }[]
+      }
       admin_dashboard: { Args: { p_list_limit?: number }; Returns: Json }
+      admin_import_manual_image: {
+        Args: {
+          p_byte_size: number
+          p_content_hash: string
+          p_height: number
+          p_job_id: string
+          p_metadata: Json
+          p_mime_type: string
+          p_private_path: string
+          p_run_id: string
+          p_slot: number
+          p_width: number
+        }
+        Returns: {
+          image_id: string
+          image_version: number
+        }[]
+      }
+      admin_import_manual_result: {
+        Args: { p_job_id: string; p_output: Json; p_run_id: string }
+        Returns: {
+          artifact_id: string
+          artifact_version: number
+          imported_stage: Database["public"]["Enums"]["pipeline_stage"]
+          job_status: Database["public"]["Enums"]["job_status"]
+        }[]
+      }
       admin_transition_job: {
         Args: {
           p_action: string
@@ -1468,6 +1521,16 @@ export type Database = {
         Returns: {
           lock_version: number
           status: Database["public"]["Enums"]["job_status"]
+        }[]
+      }
+      admin_update_provider_setting: {
+        Args: {
+          p_mode: Database["public"]["Enums"]["provider_mode"]
+          p_stage: Database["public"]["Enums"]["pipeline_stage"]
+        }
+        Returns: {
+          updated_mode: Database["public"]["Enums"]["provider_mode"]
+          updated_stage: Database["public"]["Enums"]["pipeline_stage"]
         }[]
       }
       admin_update_site_identity: {

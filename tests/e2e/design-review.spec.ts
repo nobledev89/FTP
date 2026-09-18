@@ -19,6 +19,7 @@ const publicPages = [
   { name: "article-3x2", path: "/design-review/article?hero=3-2" },
   { name: "article-no-image", path: "/design-review/article?hero=none" },
   { name: "front-page", path: "/" },
+  { name: "public-archive", path: "/blog" },
 ] as const;
 
 /** Waits for web fonts and every image. */

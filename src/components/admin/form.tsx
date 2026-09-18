@@ -73,15 +73,24 @@ type CheckboxFieldProps = {
   label: string;
   hint?: string;
   defaultChecked?: boolean;
+  disabled?: boolean;
 };
 
-export function CheckboxField({ id, name, label, hint, defaultChecked }: CheckboxFieldProps) {
+export function CheckboxField({
+  id,
+  name,
+  label,
+  hint,
+  defaultChecked,
+  disabled,
+}: CheckboxFieldProps) {
   return (
     <div className="flex items-start gap-2">
       <input
         aria-describedby={hint ? `${id}-hint` : undefined}
         className="mt-0.5 size-4 rounded-[2px] border-border-strong accent-accent"
         defaultChecked={defaultChecked}
+        disabled={disabled}
         id={id}
         name={name}
         type="checkbox"
@@ -120,7 +129,7 @@ export function FormMessage({ state }: FormMessageProps) {
   return (
     <p
       aria-live="polite"
-      className={`rounded-panel border px-3 py-2 text-sm ${classes}`}
+      className={`whitespace-pre-wrap rounded-panel border px-3 py-2 text-sm ${classes}`}
       role="status"
     >
       {state.ok ? state.message : state.error}

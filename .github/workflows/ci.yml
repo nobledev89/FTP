@@ -29,6 +29,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: pnpm prompts:seed --check
+      - run: pnpm contracts:sync --check
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck

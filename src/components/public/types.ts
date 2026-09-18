@@ -9,6 +9,7 @@ export type ImageAsset = {
   readonly src: string;
   readonly alt: string;
   readonly caption?: string;
+  readonly aspectRatio?: "16:9" | "4:5" | "3:2" | "1:1";
   /** Focal point in percent, used for responsive `object-position`. */
   readonly focalPoint?: { readonly x: number; readonly y: number };
 };

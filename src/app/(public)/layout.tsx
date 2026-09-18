@@ -15,10 +15,21 @@ export const metadata: Metadata = {
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
+  alternates: {
+    canonical: "/",
+    types: {
+      "application/rss+xml": [{ title: `${siteConfig.name} RSS`, url: "/feed.xml" }],
+    },
+  },
   openGraph: {
     siteName: siteConfig.name,
     locale: "en_GB",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${siteConfig.name}: ${siteConfig.tagline}`,
+    description: siteConfig.description,
   },
 };
 

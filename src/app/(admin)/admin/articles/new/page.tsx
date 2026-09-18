@@ -4,6 +4,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { NewArticleForm, type StageChoice } from "@/components/admin/new-article-form";
 import { Notice, Panel } from "@/components/admin/panel";
 import { getPublicationConfiguration, listProviderSettings } from "@/lib/admin/configuration";
+import { isImplementedMode } from "@/lib/admin/provider-modes";
 import { requireAdminSession } from "@/lib/auth/dal";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -20,7 +21,7 @@ type ProviderMode = Database["public"]["Enums"]["provider_mode"];
  * Per-stage mode options (plan section 10.2). Only modes the database accepts for that stage are
  * listed; `provider_settings` has the same CHECK via `private.provider_mode_allowed`.
  */
-const STAGE_OPTIONS: ReadonlyArray<Omit<StageChoice, "defaultMode">> = [
+const STAGE_OPTIONS: ReadonlyArray<Omit<StageChoice, "defaultMode" | "defaultAvailable">> = [
   {
     stage: "research",
     field: "researchMode",
@@ -61,15 +62,21 @@ export default async function NewArticlePage() {
       .map((setting) => `${setting.stage}:${setting.mode}`),
   );
 
-  const stages: readonly StageChoice[] = STAGE_OPTIONS.map((stage) => ({
-    ...stage,
-    defaultMode: defaults.get(stage.stage)?.mode ?? null,
-    // A billable API mode is only offered where provider settings already confirm it, matching the
-    // check inside create_article_job.
-    options: stage.options.filter(
-      (mode: ProviderMode) => !mode.endsWith("_api") || confirmed.has(`${stage.stage}:${mode}`),
-    ),
-  }));
+  const stages: readonly StageChoice[] = STAGE_OPTIONS.map((stage) => {
+    const defaultMode = defaults.get(stage.stage)?.mode ?? null;
+    return {
+      ...stage,
+      defaultMode,
+      defaultAvailable: defaultMode === null || isImplementedMode(stage.stage, defaultMode),
+      // Only modes with a worker adapter are offered, and a billable API mode only where provider
+      // settings already confirm it, matching the check inside create_article_job.
+      options: stage.options.filter(
+        (mode: ProviderMode) =>
+          isImplementedMode(stage.stage, mode) &&
+          (!mode.endsWith("_api") || confirmed.has(`${stage.stage}:${mode}`)),
+      ),
+    };
+  });
 
   return (
     <AdminShell currentHref="/admin/articles/new" session={session} title="New article">

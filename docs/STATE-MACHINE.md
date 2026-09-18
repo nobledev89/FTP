@@ -95,9 +95,28 @@ the latest audit. A third automatic revision cycle is not allowed.
 ### Manual provider waits
 
 `request_manual_action` keeps the current active status, releases the worker lease, connects the job to
-a matching `provider_runs` row in `action_required`, and appends an `action.required` event. Import and
-continuation arrive in the manual-workflow phase; provider output must pass the shared Zod contract
-before persistence.
+a matching `provider_runs` row in `action_required`, and appends an `action.required` event.
+
+An editor continues the wait through one of three functions, each a single transaction that
+re-authorizes the caller, locks the job and run, and requires the job to still be waiting on that
+exact run with no lease (Phase 8):
+
+- `admin_import_manual_result` stores a research packet (with its source and claim graph), a draft or
+  revised draft, or an audit; finishes the run; and completes the stage through the same
+  `complete_stage_core` the worker uses, so gates, revision limits, and follow-on transitions are
+  identical to every other mode.
+- `admin_import_manual_image` records one uploaded Gemini image per call (the job stays in
+  `IMAGES_PROCESSING`), and `admin_complete_manual_images` completes the stage once every requested
+  slot has a ready image from this run.
+
+The console validates pasted output against the shared Zod contract first; the database repeats the
+shape checks it depends on, and rejects a draft that does not brief every requested image slot. A
+second import of a finished run fails with `FT004` and names the accepted artifact.
+
+A paused manual wait keeps its run, so resuming shows the same prompt; nothing is accepted while the
+job is `PAUSED`. Escalating the wait instead abandons the run: a trigger marks it `cancelled` when the
+job's `action_required_run_id` moves away without an import, and a later claim prepares a fresh
+prompt in a new run.
 
 ## TypeScript boundaries
 

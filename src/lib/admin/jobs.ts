@@ -169,6 +169,7 @@ const imageSummarySchema = z
     version: z.number().int().positive(),
     role: z.enum(["hero", "supporting"]),
     purpose: z.string().nullable(),
+    prompt: z.string().nullable(),
     alt_text: z.string().nullable(),
     caption: z.string().nullable(),
     aspect_ratio: z.string(),
@@ -178,6 +179,7 @@ const imageSummarySchema = z
     mime_type: z.string().nullable(),
     private_path: z.string().nullable(),
     public_path: z.string().nullable(),
+    provider_run_id: uuidSchema.nullable(),
     created_at: timestampSchema,
   })
   .strict();
@@ -208,6 +210,22 @@ const providerRunSummarySchema = z
     finished_at: nullableTimestampSchema,
     cost_amount: z.union([z.number(), z.string()]).nullable(),
     cost_currency: z.string().nullable(),
+  })
+  .strict();
+
+const manualActionRunSchema = z
+  .object({
+    id: uuidSchema,
+    job_id: uuidSchema,
+    stage: pipelineStageSchema,
+    provider: z.enum(["openai", "anthropic", "gemini", "internal"]),
+    mode: providerModeSchema,
+    prompt_snapshot: z.string(),
+    schema_version: z.string(),
+    input_refs: jsonObjectSchema,
+    output_ref: jsonObjectSchema.nullable(),
+    status: z.enum(["running", "action_required", "succeeded", "failed", "cancelled"]),
+    started_at: timestampSchema,
   })
   .strict();
 
@@ -247,6 +265,7 @@ export type DraftSummary = z.infer<typeof draftSummarySchema>;
 export type AuditSummary = z.infer<typeof auditSummarySchema>;
 export type ImageSummary = z.infer<typeof imageSummarySchema>;
 export type ProviderRunSummary = z.infer<typeof providerRunSummarySchema>;
+export type ManualActionRun = z.infer<typeof manualActionRunSchema>;
 export type PublishingLogRow = z.infer<typeof publishingLogSchema>;
 export type PublishedArticle = z.infer<typeof articleSchema>;
 
@@ -257,6 +276,7 @@ export type JobDetail = Readonly<{
   audits: readonly AuditSummary[];
   images: readonly ImageSummary[];
   providerRuns: readonly ProviderRunSummary[];
+  manualAction: ManualActionRun | null;
   publishingLogs: readonly PublishingLogRow[];
   article: PublishedArticle | null;
 }>;
@@ -276,7 +296,7 @@ export async function getJobDetail(jobId: string): Promise<JobDetail | null> {
 
   const job = articleJobSchema.parse(jobResult.data);
 
-  const [research, drafts, audits, images, runs, logs, article] = await Promise.all([
+  const [research, drafts, audits, images, runs, logs, article, manualAction] = await Promise.all([
     client
       .from("research_packets")
       .select(
@@ -299,7 +319,7 @@ export async function getJobDetail(jobId: string): Promise<JobDetail | null> {
     client
       .from("images")
       .select(
-        "id, slot, version, role, purpose, alt_text, caption, aspect_ratio, status, width, height, mime_type, private_path, public_path, created_at",
+        "id, slot, version, role, purpose, prompt, alt_text, caption, aspect_ratio, status, width, height, mime_type, private_path, public_path, provider_run_id, created_at",
       )
       .eq("job_id", id.data)
       .order("slot", { ascending: true })
@@ -327,9 +347,19 @@ export async function getJobDetail(jobId: string): Promise<JobDetail | null> {
           .eq("id", job.article_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    job.action_required_run_id
+      ? client
+          .from("provider_runs")
+          .select(
+            "id, job_id, stage, provider, mode, prompt_snapshot, schema_version, input_refs, output_ref, status, started_at",
+          )
+          .eq("id", job.action_required_run_id)
+          .eq("job_id", job.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
-  for (const result of [research, drafts, audits, images, runs, logs, article]) {
+  for (const result of [research, drafts, audits, images, runs, logs, article, manualAction]) {
     if (result.error) throw toWorkflowError(result.error);
   }
 
@@ -343,6 +373,7 @@ export async function getJobDetail(jobId: string): Promise<JobDetail | null> {
       .array()
       .parse(runs.data ?? [])
       .map((run) => ({ ...run, error_summary: redactLogText(run.error_summary, 400) })),
+    manualAction: manualAction.data ? manualActionRunSchema.parse(manualAction.data) : null,
     publishingLogs: publishingLogSchema
       .array()
       .parse(logs.data ?? [])

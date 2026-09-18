@@ -28,6 +28,7 @@ process.env.NEXT_PUBLIC_SITE_URL = "http://127.0.0.1:3100";
 process.env.NEXT_PUBLIC_SUPABASE_URL = status.API_URL;
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = status.PUBLISHABLE_KEY;
 process.env.SUPABASE_URL = status.API_URL;
+process.env.REVALIDATION_SECRET = "e2e-revalidation-secret-value-at-least-32-characters";
 
 // Test-only values. The service-role key is read by the Playwright fixture to create the accounts
 // under test; it is never given to the application, which uses the publishable key alone.

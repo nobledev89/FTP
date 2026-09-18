@@ -6,6 +6,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { Cell, Pager, Table, TableHead, TableRow } from "@/components/admin/data-table";
 import { JobControls } from "@/components/admin/job-controls";
 import { JobStatusBadge } from "@/components/admin/job-status-badge";
+import { ManualActionPanel } from "@/components/admin/manual-action-panel";
 import { DefinitionList, EmptyState, JsonBlock, Notice, Panel } from "@/components/admin/panel";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { formatCost, formatDateTime, formatElapsed, formatRelativeTime } from "@/lib/admin/format";
@@ -27,6 +28,7 @@ import { requireAdminSession } from "@/lib/auth/dal";
 import { utcIsoToZonedLocal } from "@/lib/format/timezone";
 import { siteConfig } from "@/lib/site/config";
 import { stageForStatus } from "@/lib/state-machine/transitions";
+import { draftOutputSchema } from "@/lib/validation/artifacts";
 
 export const metadata: Metadata = {
   title: "Article",
@@ -62,10 +64,21 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
     ? selectedDraftVersion
     : (latestDraft?.version ?? null);
 
-  const [events, sources, draftBody] = await Promise.all([
+  // A manual image run briefs from the draft version it was prepared from, which is not
+  // necessarily the version selected for viewing below.
+  const manualImageDraftVersion =
+    detail.manualAction?.stage === "images" &&
+    typeof detail.manualAction.input_refs.draft_version === "number"
+      ? detail.manualAction.input_refs.draft_version
+      : null;
+
+  const [events, sources, draftBody, manualImageDraft] = await Promise.all([
     listJobEvents(job.id, eventPage, EVENT_PAGE_SIZE),
     listSources(job.id),
     draftVersion === null ? Promise.resolve(null) : getDraftBody(job.id, draftVersion),
+    manualImageDraftVersion === null
+      ? Promise.resolve(null)
+      : getDraftBody(job.id, manualImageDraftVersion),
   ]);
 
   const latestAudit = detail.audits[0];
@@ -83,6 +96,10 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
   const heldAtStage = job.paused_from_status
     ? stageForStatus(job.paused_from_status)
     : (job.failed_stage ?? job.needs_human_stage);
+  const manualImageBriefs = manualImageDraft
+    ? draftOutputSchema.shape.imageBriefs.parse(manualImageDraft.image_briefs)
+    : [];
+  const manualPaused = job.status === "PAUSED";
 
   return (
     <AdminShell
@@ -114,6 +131,33 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
             Failed at {job.failed_stage ? stageLabel(job.failed_stage) : "an unknown stage"} —{" "}
             {job.failure_summary}
           </Notice>
+        ) : null}
+
+        {job.action_required_kind === "manual_input" && detail.manualAction ? (
+          <Panel
+            description={`Run ${shortId(detail.manualAction.id)} · schema ${detail.manualAction.schema_version}. The prompt snapshot and accepted artifact remain in the audit trail.`}
+            title={`Manual ${stageLabel(detail.manualAction.stage)}`}
+          >
+            {manualPaused ? (
+              <div className="mb-4">
+                <Notice tone="info">
+                  The job is paused. The prompt below is kept; resume the job to import a response.
+                </Notice>
+              </div>
+            ) : null}
+            <ManualActionPanel
+              canEdit={session.canEdit && !manualPaused}
+              existingImages={detail.images.map((image) => ({
+                slot: image.slot,
+                version: image.version,
+                status: image.status,
+                providerRunId: image.provider_run_id,
+              }))}
+              imageBriefs={manualImageBriefs}
+              imageCount={job.image_count}
+              run={detail.manualAction}
+            />
+          </Panel>
         ) : null}
 
         <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">

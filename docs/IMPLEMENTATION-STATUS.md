@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 5 — Local worker and queue safety (`COMPLETE`)               |
-| Current task           | Phase 6 ready: deterministic mock pipeline end to end             |
-| Last updated           | 2026-09-18 07:52, Asia/Singapore                                  |
+| Current phase          | Phase 8 — Manual provider workflows (`COMPLETE`)                  |
+| Current task           | Phase 9 ready: subscription CLI providers                         |
+| Last updated           | 2026-09-18 12:37, Asia/Singapore                                  |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `b2afc62` Phase 5; CI retry `1819a3d` passed all three jobs        |
-| Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. |
-| Next action            | Begin Phase 6 with deterministic mock research, draft, image, audit, revision, publish, and verification handlers. |
+| Relevant commit        | Phases 6–8 are verified in the working tree, uncommitted; base `f11de0f` |
+| Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
+| Next action            | Owner review, then commit and push the verified Phase 6–8 work so GitHub CI runs it in a clean environment. |
 
 ## Status legend
 
@@ -33,9 +33,9 @@ This is the authoritative live record of implementation progress. Update it imme
 |     3 | Domain services and state machine                  | `COMPLETE`    |     100% | 2026-09-17 | 163 unit tests and 93 integration tests pass; transition map is in exact database parity; format, lint, typecheck, and production build pass. |
 |     4 | Authentication and admin shell                     | `COMPLETE`    |     100% | 2026-09-18 | 240 unit tests, 112 integration tests, 57 signed-out Playwright checks, and 10 authenticated Playwright checks pass; format, lint, typecheck, and production build pass. |
 |     5 | Local worker and queue safety                      | `COMPLETE`    |     100% | 2026-09-18 | 258 unit tests and 113 integration tests pass; concurrent claims, lease renewal/loss/recovery, shutdown retry, duplicate settlement fencing, redaction, status, CLI smoke checks, schema lint, types, and build verified. |
-|     6 | Mock pipeline end to end                           | `NOT_STARTED` |       0% | —         | —                |
-|     7 | Public publication                                 | `NOT_STARTED` |       0% | —         | —                |
-|     8 | Manual provider workflows                          | `NOT_STARTED` |       0% | —         | —                |
+|     6 | Mock pipeline end to end                           | `COMPLETE`    |     100% | 2026-09-18 | 269 unit tests, 121 integration tests, 57 signed-out/design Playwright checks, and 10 authenticated checks pass; a real mock job reaches `VERIFIED` through the production stores and RPC boundaries. |
+|     7 | Public publication                                 | `COMPLETE`    |     100% | 2026-09-18 | 278 unit tests, 121 integration tests, 61 signed-out/design browser checks, and 12 authenticated/live-publication checks pass; a real rendered article clears all eight verifier checks. |
+|     8 | Manual provider workflows                          | `COMPLETE`    |     100% | 2026-09-18 | 283 unit tests, 125 integration tests, 61 signed-out/design browser checks, and 14 authenticated checks pass; a job created in the console completes research, writing, a Gemini upload, and audit through manual handoffs and reaches `VERIFIED` with no CLI or API key. |
 |     9 | Subscription CLI providers                         | `NOT_STARTED` |       0% | —         | —                |
 |    10 | Optional API adapters                              | `NOT_STARTED` |       0% | —         | —                |
 |    11 | Publishing, scheduling, and verification hardening | `NOT_STARTED` |       0% | —         | —                |
@@ -43,14 +43,34 @@ This is the authoritative live record of implementation progress. Update it imme
 
 ## Active phase checklist
 
-### Phase 5 — Local worker and queue safety
+### Phase 8 — Manual provider workflows
 
-- [x] Build the Windows-compatible worker runtime and root/package CLI scripts.
-- [x] Implement safe claim filtering, heartbeat, lease renewal, expiry recovery, graceful shutdown, and retry/backoff.
-- [x] Add structured redacted logging and read-only worker/queue status reporting.
-- [x] Test concurrent workers, lease keepalive/loss, graceful shutdown, crash recovery, and duplicate completion fencing.
-- [x] Document manual operation, Hermes invocation, and Windows Task Scheduler.
-- [x] Run the full Phase 5 verification gate and record its evidence.
+- [x] Manual ChatGPT research and audit, and manual Claude draft and revision: the worker snapshots the exact prompt, releases its lease, and waits; the console validates the pasted JSON against the shared schema and imports it.
+- [x] Manual Gemini: per-slot prompt, copy/open, upload with alt text, caption, and focal point, private storage, then continue once every requested slot is ready.
+- [x] Authorized, atomic continuation functions that reuse the worker's stage completion, reject duplicates with the accepted artifact, and refuse paused, escalated, or foreign runs.
+- [x] Schema examples, validation feedback that keeps the operator's input, and a complete audit trail (prompt snapshot, run, artifact version, events).
+- [x] Private-to-public image lifecycle: manual uploads stay in `article-work` until the publishing service copies approved versions.
+- [x] Provider defaults editable for implemented modes only; the new-article form offers only modes with an adapter.
+- [x] Exit criterion: the full pipeline reaches `VERIFIED` through manual handoffs with no CLI or AI API key, in the database suite and in the browser.
+
+### Phase 6 — Mock pipeline end to end
+
+- [x] Implement deterministic mock research, draft, image, audit, revision, publish, and verification handlers.
+- [x] Seed editable prompt templates and the shared editorial style guide from reviewable Markdown.
+- [x] Exercise PASS, revision, failure, pause/resume, manual action, `NEEDS_HUMAN`, and scheduled publication branches.
+- [x] Expose immutable prompt version creation, activation, and rollback in the authorized admin console.
+- [x] Verify that artifacts, provider runs, publishing logs, and events are inspectable through the existing admin data paths.
+- [x] Drive a mock job through real database and Storage services to `VERIFIED` and run the full Phase 6 gate.
+
+### Phase 7 — Public publication
+
+- [x] Add a server-only, Zod-validated public repository with strict publication eligibility.
+- [x] Build the home, archive, article, alias, empty, and not-found routes from publication snapshots.
+- [x] Render GFM Markdown without raw HTML and validate all rendered links and image origins.
+- [x] Add canonical, Open Graph, Twitter, Article JSON-LD, share images, sitemap, robots, and RSS.
+- [x] Add signed, narrow cache-tag revalidation and connect it to publication.
+- [x] Prove draft isolation, malicious-Markdown safety, responsive/accessibility behaviour, and live verification.
+- [x] Run the full Phase 7 verification gate and record its evidence.
 
 ### Phase 1 — Paperframe design lock
 
@@ -129,11 +149,11 @@ This is the authoritative live record of implementation progress. Update it imme
   Supabase values and covers the signed-out paths with no database. `pnpm test:e2e:admin` builds
   against the local stack and drives the real console; CI runs it in the database job, which already
   has Supabase up.
-- **Deferred to later phases, with reasons.** `/admin/articles/[jobId]/edit` needs `admin_edit` draft
-  writes, which arrive with the mock pipeline (Phase 6). Prompt activation and rollback arrive with
-  Phase 6, which seeds the templates. Provider-mode changes arrive with the adapters that make the
-  alternatives real (Phases 8-10); a new job can already override a mode for its own run. Membership
-  management stays a SQL-editor task in version 1.
+- **Deferred to later phases, with reasons.** `/admin/articles/[jobId]/edit` remains deferred to the
+  validated manual workflow: creating an `admin_edit` row also needs an atomic rule for invalidating
+  images and forcing re-audit, otherwise an old approval could point at stale material. Provider-mode
+  changes arrive with the adapters that make the alternatives real (Phases 8-10); a new job can
+  already override a mode for its own run. Membership management stays a SQL-editor task in version 1.
 
 ## Blockers and decisions
 
@@ -152,8 +172,235 @@ This is the authoritative live record of implementation progress. Update it imme
 - **Decision: admin writes go through `create_article_job` and `admin_transition_job`.** `authenticated` has no table write privileges. Settings, prompt, and manual-import functions arrive with the phases that need them (4, 6, 8).
 - **Decision: public sign-up disabled; email provider enabled.** Setting `[auth.email] enable_signup = false` also disables email login, so sign-up is blocked with the global `[auth] enable_signup = false` instead (found by the RLS tests).
 - **Decision: explicit function grants only.** PostgreSQL ignores per-schema default-privilege revokes of the global `PUBLIC EXECUTE` default, so the foundation migration revokes it globally. The grants migration then grants API roles only the functions they need. A schema test found and now guards this.
+- **Decision: mock branch controls live on the job.** `mock:audit`, `mock:fail`, `mock:fail-always`,
+  `mock:manual`, and `mock:slow` keywords make exceptional paths reproducible from the admin without
+  environment switches or alternate queue code. They change adapter output only; the same stores,
+  gates, leases, retry policy, publication boundary, and verifier are used.
+- **Decision: prompt edits are immutable versions.** Editors save a new row and can activate an old
+  row to roll back. The database serializes version allocation and keeps each provider run's prompt
+  snapshot, so activation never rewrites history.
+- **Decision: the Phase 6 live-page fixture is injected only at the HTTP boundary.** Phase 7 has not
+  built `/blog/[slug]` yet. The integration suite supplies representative rendered HTML to the real
+  verifier, which still executes all eight checks and calls the real `record_verification` RPC.
+- **Decision: public web reads use the publishable key and publication RLS.** A sessionless,
+  server-only client reads only `articles` and aliases. Strict DTO parsing rejects unexpected status,
+  canonical, image, or source values before rendering; no service credential exists in the web app.
+- **Decision: provider Markdown cannot supply HTML or images.** GFM renders through an explicit
+  component map, raw HTML and Markdown images are dropped, links use a protocol/path allowlist, and
+  all article images and sources come from structured publication snapshot fields.
+- **Decision: publication invalidates data tags with a signed narrow request.** The worker signs the
+  raw slug body with HMAC-SHA256 plus a timestamp and nonce. The route applies clock, constant-time,
+  replay, rate, body, and slug checks, then expires only the article-list and exact-slug tags.
+- **Decision: manual continuation is a database boundary, not a worker callback.** The worker
+  prepares and snapshots the prompt and releases its lease; `admin_import_manual_result`,
+  `admin_import_manual_image`, and `admin_complete_manual_images` re-authorize the editor, lock the
+  job and run, store the artifact, finish the run, and complete the stage through the same
+  `complete_stage_core` the worker uses. Manual text adapters reuse the mock adapters' prompt
+  preparation, so every mode renders the same reviewed templates.
+- **Decision: provider-run idempotency keys include the claim version.** Admin retry and resolution
+  reset `attempt_count`, so a redone stage produced the same `job:stage:cycle:attempt` key as its
+  earlier, finished run; reopening that immutable run cost a spurious failed attempt (a latent Phase 6
+  defect, reproduced with a manual redo). The key now ends with the job's `lock_version` at claim.
+- **Decision: an abandoned manual run is cancelled, not left waiting.** A trigger marks the run
+  `cancelled` when the job's `action_required_run_id` moves away without an import. Pausing keeps
+  the run, so resume shows the same prompt.
+- **Decision: a draft must brief every requested image slot.** Otherwise the image stage could never
+  complete. The manual import and the worker's draft and revision stages both enforce it.
+- **Decision: the console offers only modes with a worker adapter.** A job snapshotted onto a mode
+  without one fails permanently at that stage. The seeded writing default stays Claude Code (the
+  plan's version 1 default, arriving in Phase 9); until then it is shown as unavailable and new jobs
+  must choose a writing mode explicitly, which the create action re-checks on the server.
+- **Decision: the admin proxy buffers up to 11 MB.** Next.js buffers proxied request bodies to 10 MB
+  by default and silently drops the rest, which would corrupt the largest uploads the 11 MB Server
+  Action limit admits. `experimental.proxyClientMaxBodySize` now matches it.
+- **Open item for production: Vercel caps function request bodies at 4.5 MB.** Manual images are
+  uploaded through a Server Action, so on Vercel a file above about 4.4 MB will be refused before the
+  application sees it, even though the console, Storage, and database accept 10 MB. Recommended fix
+  before production (Phase 11 or 12): upload from the browser straight to `article-work` under the
+  existing editor Storage policy, then have the Server Action verify the stored object's bytes before
+  calling `admin_import_manual_image`. Local and CI runs are unaffected.
+- **Decision: cache invalidation failure cannot undo publication.** Revalidation runs after the
+  publication transaction and reports a safe boolean. The live verifier remains the correctness
+  boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-18 — Phase 8 manual provider workflows complete
+
+Date/time: 2026-09-18 12:37, Asia/Singapore
+
+Phase/task: Phase 8 — manual ChatGPT, Claude, and Gemini workflows, their continuation boundary, and
+the console run panel
+
+Status change: Phase 8 `NOT_STARTED` → `IN_PROGRESS` → `COMPLETE`. Current task moves to Phase 9.
+
+What changed: Added manual adapters for research, draft, revision, and audit (prompt preparation
+shared with the reviewed templates; execution requests operator input) and a Gemini adapter that
+prepares one prompt section per requested slot. Added migration
+`20260918130000_manual_workflows.sql` with the authorized, single-transaction import functions for
+text artifacts and per-slot images, the image completion function, an implemented-modes-only provider
+default function, and a trigger that cancels a manual run abandoned by escalation. The imports reject
+duplicates with `FT004`, refuse paused or escalated waits, require every requested image slot to be
+briefed, and check that an uploaded object's stored size and type match the recorded ones. Added the
+article-page run panel (prompt snapshot, copy, open provider, JSON example, validated paste that keeps
+rejected input, per-slot image upload with metadata, continue), server actions that re-check the wait
+before any upload, byte-level image inspection, editable provider defaults, and new-article mode
+options limited to implemented adapters. Fixed a latent Phase 6 idempotency defect: a stage redone
+after admin retry or resolution reopened its earlier finished run; keys now include the claim version.
+Matched the admin proxy's body buffer to the Server Action limit. Documented the workflow in the
+admin, worker, state-machine, and Supabase guides and the README.
+
+Files/migrations affected: `supabase/migrations/20260918130000_manual_workflows.sql`; generated web
+and worker database types; `local-worker/src/providers/{contract,registry}.ts`,
+`local-worker/src/providers/manual/**`, the mock adapters' key calls, and
+`local-worker/src/pipeline/handlers.ts`; `src/lib/admin/{manual-actions,manual-validation,image-file,
+provider-actions,provider-modes,actions,jobs}.ts`; `src/components/admin/{manual-action-panel,
+provider-setting-form,new-article-form,form}.tsx`; the article, new-article, and providers pages;
+`next.config.ts`; `tests/integration/{mock-pipeline,schema}.test.ts` and helpers;
+`tests/e2e/admin-session.spec.ts`; `docs/{ADMIN-CONSOLE,LOCAL-WORKER,STATE-MACHINE,SUPABASE}.md`;
+`README.md`.
+
+Verification performed: A fresh `pnpm supabase:reset` applies all eleven migrations and both seed
+files; `pnpm db:lint` reports no schema errors; `pnpm db:types` regenerates both clients.
+`pnpm contracts:sync --check` and `pnpm prompts:seed --check` report no drift. `pnpm format:check`,
+`pnpm lint`, and `pnpm typecheck` pass. `pnpm test` passes 283 tests in 31 files, including the
+manual adapter's prepared prompt, run key, and operator-input request, and pasted-response parsing.
+`pnpm test:integration` passes 125 tests in 8 files: a job completes research, draft, a private
+upload, image completion, and audit through the import functions and reaches `VERIFIED` with four
+succeeded manual runs; a second import fails `FT004`; a redo after escalation opens a fresh run and
+cancels the abandoned one (this scenario reproduced the idempotency defect before the fix); imports
+are refused for a draft missing an image brief, a viewer, a paused job, a misreported upload size, an
+unrequested slot, and early completion; provider defaults accept only implemented modes and keep
+revision aligned with writing; grants list the new functions exactly. `pnpm test:e2e` passes 61
+signed-out/design checks with the 14 database-dependent checks skipped. `pnpm test:e2e:admin` builds
+the app and passes all 14 local-stack checks: the new-article form shows the unavailable writing
+default as disabled; a provider default is changed and restored; and a job created in the browser
+with all four manual modes shows the exact prompt and provider link, keeps rejected JSON and
+schema-invalid responses in place with their errors, has no horizontal overflow at 375 px, imports
+research from a fenced response, a draft, a Gemini upload with a caption, and an audit, then is
+published and live-verified to `VERIFIED`. Agent review of the captured panel screenshots found no
+layout problem. The stand-in responses are schema-valid artifacts from the mock builders; no real
+ChatGPT, Claude, or Gemini session was used.
+
+Result: Passed. The Phase 8 exit criterion is met locally. The Vercel request-size limit on image
+uploads is recorded as an open production item.
+
+Commit/PR: Not committed in this working tree. Phases 6, 7, and 8 remain together on base `f11de0f`
+pending owner review; GitHub CI has not run them.
+
+Next action: Owner review, then commit and push the Phase 6–8 work so CI verifies it in a clean
+environment. Phase 9 then starts by re-inspecting the installed Claude Code and Codex CLIs.
+
+### 2026-09-18 — Phase 7 public publication complete
+
+Date/time: 2026-09-18 09:38, Asia/Singapore
+
+Phase/task: Phase 7 — Supabase-backed public routes, safe Markdown, SEO/feed surfaces, signed cache
+invalidation, and real-page verification
+
+Status change: Phase 7 `IN_PROGRESS` → `COMPLETE`. Current task moves to Phase 8.
+
+What changed: Replaced the public empty-only home with a publication feature and latest stream;
+added the paginated `/blog` archive and `/blog/[slug]` article page with public alias redirects,
+empty/invalid/not-found handling, responsive published images, byline and dates, disclosure,
+structured sources, related articles, and a narrow server-only repository. Public rows and nested
+JSON are strictly Zod-validated and read through a sessionless publishable-key client, leaving RLS as
+the eligibility boundary. Added GFM rendering through the existing prose component map with raw HTML
+and Markdown images disabled and link protocols constrained. Added per-article canonical, Open Graph,
+Twitter, Article JSON-LD, generated branded share cards, sitemap, robots, RSS, and the canonical `www`
+redirect. Added five-minute article/list data tags and a signed `POST /api/revalidate` contract with
+HMAC-SHA256, timestamp, nonce, constant-time comparison, replay/rate bounds, exact body/slug
+validation, and no arbitrary tags or paths. The worker now calls it after publication without
+rolling back an already committed article on transport failure. Added conditional local-only Next
+image access to the fixed Supabase development port while hosted builds retain the private-network
+guard. Documented the public publication contract and updated worker operations.
+
+Files affected: `src/lib/publication/**`; `src/app/(public)/{page,layout,blog/**,opengraph-image,
+twitter-image}`; `src/app/{api/revalidate,feed.xml,robots,sitemap}`; the safe Markdown component and
+public image DTO; worker publishing/revalidation integration; public and authenticated Playwright
+coverage; `next.config.ts`; `package.json`/lockfile; `.env.example`, README, publication/worker/status
+documentation, and CI-covered test surfaces. No database migration was required because the
+publication snapshot, aliases, public Storage, indexes, grants, and due-publication RLS already
+existed.
+
+Verification performed: Reviewed the bundled Next.js 16.3.5 data, cache, revalidation, route,
+metadata, image, not-found, JSON-LD, sitemap, robots, Open Graph, and redirect contracts before
+implementation. `pnpm prompts:seed --check` and `pnpm contracts:sync --check` report no drift.
+`pnpm db:lint` reports no schema errors; `pnpm db:types` regenerates both clients. `pnpm lint` and
+`pnpm typecheck` pass. `pnpm test` passes 278 tests in 29 files, including malicious Markdown,
+publication DTO, HMAC/replay, and worker signing cases. `pnpm test:integration` passes 121 tests in 8
+files. `pnpm build` completes with the intended five-minute public routes and generated metadata
+routes. `pnpm test:e2e` passes 61 signed-out/design checks at 375, 768, 1024, and 1440 px with 12
+database-dependent checks intentionally skipped. `pnpm test:e2e:admin` passes all 12 local-stack
+checks: a deterministic job publishes a real PNG, calls signed invalidation, renders the actual
+article, clears all eight live checks to `VERIFIED`, exposes canonical/social/JSON-LD/RSS/sitemap/
+robots surfaces, permanently redirects an alias, hides an unpublished slug, loads the optimized
+image, and has no horizontal overflow in captured real home/archive/article pages at 375 and 1440
+px. Agent review of those screenshots found no layout, crop, typography, footer, or public/admin
+separation regression.
+
+Result: Passed. Public pages expose only eligible publication snapshots, render untrusted Markdown
+without executable content, are SEO/feed complete, and the production verifier now checks the real
+rendered route rather than the Phase 6 boundary fixture.
+
+Commit/PR: Not committed in this working tree. Phase 6 and Phase 7 changes remain together on base
+`f11de0f`.
+
+Next action: Start Phase 8 with manual ChatGPT research prompt export and schema-validated response
+import, reusing the artifact/run contracts proven by the mock pipeline.
+
+### 2026-09-18 — Phase 6 mock pipeline end to end complete
+
+Date/time: 2026-09-18 09:04, Asia/Singapore
+
+Phase/task: Phase 6 — deterministic mock providers, artifact persistence, publication, verification,
+prompt versions, and exceptional workflow branches
+
+Status change: Phase 6 `NOT_STARTED` → `COMPLETE`. Current task moves to Phase 7.
+
+What changed: Added the worker copy of the shared strict artifact contracts and drift checker;
+deterministic research, drafting, revision, PNG image, and audit adapters; job-keyword branch controls;
+the provider registry; prompt preparation and immutable provider-run snapshots; artifact persistence
+for research/source/claim graphs, drafts, audits, images, and Storage; internal publishing and
+eight-check live verification services; and real CLI handler registration. Publishing copies the
+latest ready image per slot from `article-work` to `article-public` before the existing atomic
+`publish_article` boundary. Verification evaluates the served status, canonical, title, body, hero,
+metadata, JSON-LD, and placeholders before the existing `record_verification` boundary. Added six
+reviewable Markdown prompts, generated idempotent SQL seed data, immutable prompt-version creation
+and activation RPCs, and the editor/owner prompt UI. CI now rejects prompt-seed or worker-contract
+drift. The existing admin detail/timeline queries display every resulting version, run, event, and
+publishing log.
+
+Files/migrations affected: `local-worker/src/{contracts,db,pipeline,providers,publishing,verification}/**`;
+worker CLI/runner/store integration; `prompts/*.md`;
+`scripts/{generate-prompt-seed,sync-worker-contracts}.mjs`;
+`supabase/migrations/20260918120000_mock_pipeline.sql`; `supabase/seeds/prompts.sql`; generated
+database types; prompt admin action/UI/configuration; pipeline and grant integration tests; root
+scripts, Supabase seed configuration, CI, README, and operations/admin/Supabase documentation.
+
+Verification performed: A fresh `pnpm supabase:reset` applies all ten migrations and both seed files;
+`pnpm db:lint` reports no schema errors; `pnpm db:types` regenerates both clients; and
+`pnpm prompts:seed --check` plus `pnpm contracts:sync --check` report no drift. `pnpm format:check`,
+`pnpm lint`, and `pnpm typecheck` pass. `pnpm test` passes 269 tests in 25 files.
+`pnpm test:integration` passes 121 tests in 8 files, including a real service-role job through
+research, draft, private PNG upload, audit, public Storage copy, publication, all eight verification
+checks, and `VERIFIED`; it also covers revision convergence, terminal failure, manual action,
+editorial escalation, an in-flight pause with stale-lease fencing and safe resume, due scheduling,
+prompt seed, immutable edit/activation/rollback, and viewer denial. `pnpm build` completes on Next.js
+16.3.5. `pnpm test:e2e` passes 57 checks (10 authenticated checks intentionally skipped in that
+no-database suite), and `pnpm test:e2e:admin` passes all 10 authenticated checks, including 375px and
+1440px overflow review. A temporary local-environment CLI smoke run also shows `worker:once` claiming
+and completing a mock stage through the registered handlers, followed by a healthy `worker:status`
+report with all seven stages advertised.
+
+Result: Passed. The exit job reaches `VERIFIED` without bypassing artifact validation, queue leases,
+Storage, the publication RPC, the verifier, or the verification RPC; every intermediate version and
+event remains queryable by the admin.
+
+Commit/PR: Not committed in this working tree. Local verification is complete on base `f11de0f`.
+
+Next action: Start Phase 7 and replace the current public empty state with Supabase-backed home,
+archive, and article routes so operational live verification can fetch the real rendered page.
 
 ### 2026-09-18 — Phase 5 local worker and queue safety complete
 

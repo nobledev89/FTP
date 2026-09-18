@@ -55,8 +55,14 @@ describe("migrations", () => {
       order by r.role, p.proname
     `);
     expect(executable).toEqual([
+      { role: "authenticated", name: "admin_activate_prompt_template" },
+      { role: "authenticated", name: "admin_complete_manual_images" },
+      { role: "authenticated", name: "admin_create_prompt_version" },
       { role: "authenticated", name: "admin_dashboard" },
+      { role: "authenticated", name: "admin_import_manual_image" },
+      { role: "authenticated", name: "admin_import_manual_result" },
       { role: "authenticated", name: "admin_transition_job" },
+      { role: "authenticated", name: "admin_update_provider_setting" },
       { role: "authenticated", name: "admin_update_site_identity" },
       { role: "authenticated", name: "admin_update_site_settings" },
       { role: "authenticated", name: "create_article_job" },

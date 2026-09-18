@@ -29,7 +29,9 @@
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
     "db:lint": "supabase db lint --local --schema public,private --level warning --fail-on warning",
-    "db:types": "node scripts/generate-db-types.mjs"
+    "db:types": "node scripts/generate-db-types.mjs",
+    "prompts:seed": "node scripts/generate-prompt-seed.mjs",
+    "contracts:sync": "node scripts/sync-worker-contracts.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -37,6 +39,8 @@
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
     "zod": "^4.6.5"
   },
