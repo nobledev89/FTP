@@ -11,9 +11,9 @@ This is the authoritative live record of implementation progress. Update it imme
 | Current task           | Phase 9 ready: subscription CLI providers                         |
 | Last updated           | 2026-09-18 12:37, Asia/Singapore                                  |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | Phases 6–8 are verified in the working tree, uncommitted; base `f11de0f` |
+| Relevant commit        | `beeb4c7` (Phases 6–8), pushed; GitHub Actions run 35307982789 passed |
 | Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
-| Next action            | Owner review, then commit and push the verified Phase 6–8 work so GitHub CI runs it in a clean environment. |
+| Next action            | Start Phase 9 by re-inspecting the installed Claude Code CLI (`claude --version`, `claude --help`, login status) before writing its adapter. |
 
 ## Status legend
 
@@ -224,6 +224,35 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-18 — Phases 6–8 committed; GitHub CI passes
+
+Date/time: 2026-09-18, Asia/Singapore
+
+Phase/task: Phases 6–8 — commit, push, and clean-environment CI
+
+Status change: The Phase 6, 7, and 8 work moves from an uncommitted working tree to `main`. No phase
+status changes.
+
+What changed: Committed the verified Phase 6, 7, and 8 work as one commit, `beeb4c7`, because the
+three phases share the worker handlers, the pipeline test suite, the generated types, and this record,
+so no split would leave each intermediate commit buildable and tested. Pushed `main` to `origin`.
+Before committing, the staged diff was checked for environment files and key-shaped strings; none
+were present.
+
+Files/migrations affected: `docs/IMPLEMENTATION-STATUS.md` (this entry); no code or migrations.
+
+Verification performed: GitHub Actions run 35307982789 on `beeb4c7` completed with all three jobs
+`success`: "Lint, typecheck, test, build"; "Design review (Playwright)"; and "Supabase schema, RLS,
+and queue", which applies all eleven migrations, lints the schema, checks generated-type drift, and
+runs the integration and authenticated admin suites, including the manual-provider flow to
+`VERIFIED`.
+
+Result: Passed. Phases 6–8 are confirmed in a clean environment.
+
+Commit/PR: `beeb4c7` on `main`, pushed; this status update is committed separately.
+
+Next action: Start Phase 9 by re-inspecting the installed Claude Code CLI before writing its adapter.
 
 ### 2026-09-18 — Phase 8 manual provider workflows complete
 
