@@ -37,7 +37,8 @@ captions come from structured snapshot fields rather than article Markdown.
 
 Public queries use a five-minute Next data cache. Lists, sitemap, and RSS carry the
 `public:articles` tag; individual resolutions also carry `public:article:<slug>`. When publication
-commits, the worker calls `POST /api/revalidate` before live verification.
+commits, the worker calls `POST /api/revalidate` before live verification, retrying a transport
+failure, `429`, or `5xx` up to three times and recording the outcome in `publishing_logs`.
 
 The request body is exactly `{"slug":"<published-slug>"}` and carries:
 

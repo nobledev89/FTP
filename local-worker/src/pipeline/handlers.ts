@@ -12,7 +12,7 @@ import type { ImageStageInput } from "../providers/mock/images.js";
 import type { ResearchStageInput } from "../providers/mock/research.js";
 import { researchSummary } from "../providers/mock/research.js";
 import type { PublishingService } from "../publishing/publish.js";
-import { WorkerStageError } from "../queue/retry.js";
+import { WorkerStageError, retryAt } from "../queue/retry.js";
 import type { StageContext, StageHandlers } from "../queue/runner.js";
 import type { VerificationService } from "../verification/verify.js";
 
@@ -497,12 +497,17 @@ export function createPipelineHandlers(dependencies: PipelineDependencies): Stag
         workerId: context.workerId,
         leaseToken: context.claim.leaseToken,
         articleId: job,
+        // A freshly published page is usually a deployment or cache delay away from being correct,
+        // so failed attempts back off on the same schedule as any other transient stage failure
+        // instead of hammering the origin every two minutes. The database clamps the value.
+        retryAt: retryAt("verify", context.claim.attempt, "transient"),
       }),
     );
 
     logger.info("stage.verified", {
       job_id: context.claim.jobId,
       url: outcome.url,
+      hero_url: outcome.heroUrl,
       passed: outcome.passed,
       status: outcome.status,
       failed_checks: outcome.checks

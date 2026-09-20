@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 10 — Optional API adapters (`COMPLETE`)                        |
-| Current task           | Phase 11 ready: publishing, scheduling, and verification hardening   |
-| Last updated           | 2026-09-18 17:14, Asia/Singapore                                     |
+| Current phase          | Phase 11 — Publishing, scheduling, and verification hardening (`COMPLETE`) |
+| Current task           | Phase 12 ready: operations, documentation, and release QA            |
+| Last updated           | 2026-09-21 07:20, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | `3c13d0c` on `origin/main`; GitHub Actions run `35328011150` passed. |
+| Relevant commit        | Phase 11 work is committed locally and not yet pushed; the last pushed commit is `0804993`. |
 | Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
-| Next action            | Start Phase 11 publishing, scheduling, and verification hardening. |
+| Next action            | Push the Phase 11 commit and confirm GitHub Actions, then start Phase 12 operations, documentation, and release QA. |
 
 ## Status legend
 
@@ -38,10 +38,28 @@ This is the authoritative live record of implementation progress. Update it imme
 |     8 | Manual provider workflows                          | `COMPLETE`    |     100% | 2026-09-18 | 283 unit tests, 125 integration tests, 61 signed-out/design browser checks, and 14 authenticated checks pass; a job created in the console completes research, writing, a Gemini upload, and audit through manual handoffs and reaches `VERIFIED` with no CLI or API key. |
 |     9 | Subscription CLI providers                         | `COMPLETE`    |     100% | 2026-09-18 | 335 unit tests, 129 integration tests, 61 signed-out/design and 14 authenticated browser checks pass; live Claude Code draft and live Codex research from the production prompts pass the artifact schemas; signed-out and usage-limited CLIs reach an actionable `NEEDS_HUMAN`. |
 |    10 | Optional API adapters                              | `COMPLETE`    |     100% | 2026-09-18 | OpenAI, Anthropic, and Gemini adapters share the production prompts/schemas; 344 unit, 130 integration, 61 signed-out/design, and 15 authenticated browser checks pass, including a switched API stage through `VERIFIED`. |
-|    11 | Publishing, scheduling, and verification hardening | `NOT_STARTED` |       0% | —         | —                |
+|    11 | Publishing, scheduling, and verification hardening | `COMPLETE`    |     100% | 2026-09-21 | 357 unit, 147 integration (passed twice without a reset), 61 signed-out/design, and 15 authenticated browser checks pass; concurrent publish, slug/alias conflicts, DST-repeated schedule instants, missing public image copies, revalidation retry and logging, clamped verification retries, and the provider isolation boundary are all covered; a live signed revalidation and a real hero-image fetch clear end to end. |
 |    12 | Operations, documentation, and release QA          | `NOT_STARTED` |       0% | —         | —                |
 
 ## Active phase checklist
+
+### Phase 11 — Publishing, scheduling, and verification hardening
+
+- [x] Finalize the atomic publishing service: storage copies use constrained, re-runnable public
+      keys, and a failed copy is a transient stage failure that leaves nothing to clean up.
+- [x] Finalize scheduled-job claiming: schedules are instants, a schedule beyond a one-year horizon
+      is rejected, and claim eligibility and publication eligibility are checked independently.
+- [x] Finalize signed revalidation: bounded retries with a fresh signature per attempt, no retry of
+      a rejected signature, and every attempt recorded through `record_revalidation`.
+- [x] Finalize verification retries: the worker supplies the `verify` stage backoff,
+      `record_verification` clamps it to between now and an hour out, and an exhausted job names the
+      checks that failed.
+- [x] Make `hero_image_ok` resolve the rendered hero image over HTTP so a partially available page
+      cannot verify.
+- [x] Test simultaneous publish attempts, slug and alias conflicts, schedule timezone edges, storage
+      failures, stale cache, and partially available public pages.
+- [x] Prove provider modules cannot directly mark content published.
+- [x] Run the complete database, type, unit, build, and browser verification gate.
 
 ### Phase 10 — Optional API adapters
 
@@ -291,6 +309,86 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Phase 11 complete
+
+Date/time: 2026-09-21 07:20, Asia/Singapore
+
+Phase/task: Phase 11 — publishing, scheduling, and verification hardening
+
+Status change: Phase 11 `NOT_STARTED` -> `COMPLETE`. Current task moves to Phase 12.
+
+What changed:
+
+- Live verification now proves the hero image resolves. `hero_image_ok` previously passed on any
+  `<img>` carrying alt text, so an article whose public Storage copy never landed verified as
+  correct. `heroImageUrl` takes the URL the page actually rendered and the verification service
+  fetches it (`HEAD`, falling back to `GET` on `405`/`501`), failing the check unless it answers
+  `2xx` with an `image/*` content type. A hero that cannot be resolved fails rather than being
+  omitted, because `record_verification` requires all eight names.
+- Cache revalidation is retried and recorded. `CacheRevalidationClient` retries transport failures,
+  `429`, and `5xx` up to three times with a fresh timestamp, nonce, and signature per attempt so
+  replay protection never rejects a legitimate retry; a rejected signature is not retried. A new
+  `record_revalidation` RPC gives the previously unused `revalidate` log kind a writer, so a failed
+  invalidation is visible in `publishing_logs` instead of silent. Publication has already committed
+  by then, so neither the request nor the log entry can throw.
+- Verification retries use the stage backoff. The verify handler passes
+  `retryAt("verify", attempt, "transient")` instead of leaving the database to apply a flat two
+  minutes, and `record_verification` clamps whatever it is given to between now and one hour out so
+  a bad clock or argument cannot park a job. An exhausted job now names the failing checks in
+  `action_required_message` and in the `verification.exhausted` event.
+- Publishing storage copies are constrained. `publicImagePath` derives the public key from the slug
+  and the working file name and strips anything outside `[A-Za-z0-9._-]`, so the key is always
+  inside the `articles/` prefix `publish_article` requires and a repeated publish overwrites the
+  same object. Storage download and upload failures are now raised as transient `WorkerStageError`s,
+  so a failed copy retries rather than escalating an article that is otherwise ready.
+- Schedules are bounded. A new `article_jobs_schedule_horizon` trigger rejects a
+  `desired_publish_at` more than a year out with `FT005`, which catches a mistyped year that would
+  otherwise sit in the queue claimable-never.
+
+Files/migrations affected: `supabase/migrations/20260921100000_publishing_hardening.sql` (new:
+`private.guard_schedule_horizon`, `public.record_revalidation`, replaced
+`public.record_verification`); `local-worker/src/verification/checks.ts`, `verify.ts`,
+`local-worker/src/publishing/publish.ts`, `revalidate.ts`, `local-worker/src/pipeline/handlers.ts`,
+`local-worker/src/cli/main.ts`; regenerated `database.types.ts` for both packages; new
+`local-worker/src/publishing/publish.test.ts` and `tests/integration/publishing.test.ts`; updated
+`checks.test.ts`, `revalidate.test.ts`, `tests/integration/mock-pipeline.test.ts`,
+`tests/e2e/admin-session.spec.ts`; docs `SUPABASE.md`, `STATE-MACHINE.md`, `PUBLICATION.md`,
+`LOCAL-WORKER.md`.
+
+Verification performed: `pnpm supabase:reset` applied all 14 migrations and both seeds from scratch.
+`pnpm db:types` regenerated both type files. `pnpm db:lint` (`plpgsql_check`, fail on warning): no
+schema errors. `pnpm format`, `pnpm lint`, `pnpm typecheck`, and `pnpm build` are clean. `pnpm test`:
+41 files, 357 tests pass (was 344). `pnpm test:integration`: 9 files, 147 tests pass (was 130), then
+pass again without a reset. `pnpm test:e2e`: 61 signed-out/design checks pass. `pnpm test:e2e:admin`:
+15 authenticated checks pass, including the live publication that now signs a real revalidation
+request against the running site, has it accepted, refuses the unsigned one, and fetches the real
+hero image from Supabase Storage before reaching `VERIFIED`.
+
+The new integration suite covers: two transactions publishing the same job (one article, second call
+`FT001`, one `job.published` event); a replayed publish on a settled lease; a slug reserved by an
+alias (`FT006`); a slug collision escalating to `publish_conflict` with the approved draft intact;
+two schedules inside the repeated Europe/London hour of 2026-10-25 staying distinct instants, with
+only the passed one becoming claimable; a rescheduled job with a live lease still refusing to publish
+early (`FT005`); a schedule past the one-year horizon rejected at both `create_article_job` and
+`admin_transition_job`; a public image path outside `articles/` rejected (`22023`) and a repeated
+path treated as a no-op; publication refused while a requested image has no public copy, then
+retried back to `APPROVED`; a failed revalidation logged without touching the published article;
+`record_revalidation` refused for an unpublished job and for a non-worker caller; a partially
+available page (hero 404) staying `PUBLISHED` with a backed-off retry and unable to pass by skipping
+the hero; a far-future retry clamped to an hour and a past retry pulled forward to now; exhausted
+attempts naming both failed checks with the article still `published`; and the isolation boundary —
+`complete_stage` to `PUBLISHED`, a direct `article_jobs` status write, a forged `articles` insert,
+and a foreign worker's `publish_article` all refused, with no article written.
+
+Result: Passed. Two workers cannot publish the same job twice, a scheduled article publishes only at
+its instant, a cache failure is recorded rather than lost, and an article whose page or hero image is
+not actually available to a reader stays `PUBLISHED` and never reaches `VERIFIED`.
+
+Commit/PR: committed on `main`; not yet pushed.
+
+Next action: Push the Phase 11 commit, confirm GitHub Actions, then start Phase 12 operations,
+documentation, and release QA.
 
 ### 2026-09-18 — Phase 10 pushed; GitHub CI passes
 

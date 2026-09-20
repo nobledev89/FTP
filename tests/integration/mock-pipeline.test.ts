@@ -101,7 +101,13 @@ function pipeline(
   const artifacts = new ArtifactStore(client);
   const fetchPage = (async (input: RequestInfo | URL) => {
     const requestUrl = input instanceof Request ? input.url : input.toString();
-    const slug = new URL(requestUrl).pathname.split("/").filter(Boolean).at(-1);
+    const pathname = new URL(requestUrl).pathname;
+    // Verification resolves the hero image the page rendered, exactly as a browser would, so the
+    // fixture has to serve the public Storage object as well as the article.
+    if (pathname.startsWith("/storage/v1/object/public/")) {
+      return new Response(null, { status: 200, headers: { "Content-Type": "image/png" } });
+    }
+    const slug = pathname.split("/").filter(Boolean).at(-1);
     const { data: article, error } = await client
       .from("articles")
       .select("slug, title, meta_description, body_markdown, canonical_url, hero_image")

@@ -3,7 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../db/database.types.js";
 import { WorkerDatabaseError, unwrapResult } from "../db/worker-store.js";
 
-import { evaluatePage, allChecksPassed, type VerificationCheck } from "./checks.js";
+import {
+  evaluatePage,
+  allChecksPassed,
+  heroImageUrl,
+  type HeroAsset,
+  type VerificationCheck,
+} from "./checks.js";
 
 /**
  * Live verification (plan section 14).
@@ -18,6 +24,7 @@ export type VerificationOutcome = Readonly<{
   checks: readonly VerificationCheck[];
   passed: boolean;
   url: string;
+  heroUrl: string | null;
 }>;
 
 export class VerificationService {
@@ -52,13 +59,24 @@ export class VerificationService {
     const url = new URL(`/blog/${article.slug}`, this.options.publicSiteUrl).toString();
     const response = await this.fetchPage(url);
 
-    const checks = evaluatePage(response, {
-      canonicalUrl: article.canonical_url,
-      title: article.title,
-      metaDescription: article.meta_description,
-      bodyProbe: bodyProbe(article.body_markdown),
-      expectHeroImage: article.hero_image !== null,
-    });
+    // A rendered page can reference an image that was never copied to public Storage, so the hero
+    // is fetched separately before the checks are evaluated.
+    const expectHeroImage = article.hero_image !== null;
+    const heroUrl =
+      expectHeroImage && response.status === 200 ? heroImageUrl(response.html, url) : null;
+    const heroAsset = heroUrl === null ? null : await this.fetchHeroImage(heroUrl);
+
+    const checks = evaluatePage(
+      response,
+      {
+        canonicalUrl: article.canonical_url,
+        title: article.title,
+        metaDescription: article.meta_description,
+        bodyProbe: bodyProbe(article.body_markdown),
+        expectHeroImage,
+      },
+      heroAsset,
+    );
 
     const status = unwrapResult(
       await this.client.rpc("record_verification", {
@@ -71,7 +89,7 @@ export class VerificationService {
       "record_verification",
     );
 
-    return { status, checks, passed: allChecksPassed(checks), url };
+    return { status, checks, passed: allChecksPassed(checks), url, heroUrl };
   }
 
   private async fetchPage(
@@ -99,6 +117,52 @@ export class VerificationService {
         status: 0,
         html: `<!-- fetch failed: ${reason} -->`,
         durationMs: Date.now() - startedAt,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Asks only for the headers: the check needs the status and the media type, and an article hero
+   * is large enough that downloading it on every attempt would be wasteful. Storage back ends that
+   * reject HEAD fall back to a GET whose body is discarded.
+   */
+  private async fetchHeroImage(url: string): Promise<HeroAsset> {
+    const doFetch = this.options.fetchPage ?? fetch;
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.options.timeoutMs);
+
+    try {
+      let response = await doFetch(url, {
+        method: "HEAD",
+        signal: controller.signal,
+        redirect: "follow",
+        headers: { "User-Agent": "FinTechPulse-Verifier/1.0", Accept: "image/*" },
+      });
+      if (response.status === 405 || response.status === 501) {
+        response = await doFetch(url, {
+          method: "GET",
+          signal: controller.signal,
+          redirect: "follow",
+          headers: { "User-Agent": "FinTechPulse-Verifier/1.0", Accept: "image/*" },
+        });
+      }
+      return {
+        url,
+        status: response.status,
+        contentType: response.headers.get("content-type"),
+        durationMs: Date.now() - startedAt,
+      };
+    } catch (error) {
+      const reason = error instanceof Error ? error.name : "unknown";
+      return {
+        url,
+        status: 0,
+        contentType: null,
+        durationMs: Date.now() - startedAt,
+        error: `The hero image could not be fetched (${reason})`,
       };
     } finally {
       clearTimeout(timer);

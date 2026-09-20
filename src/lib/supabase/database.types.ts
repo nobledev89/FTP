@@ -1643,6 +1643,19 @@ export type Database = {
           slug: string
         }[]
       }
+      record_revalidation: {
+        Args: {
+          p_attempts?: number
+          p_duration_ms?: number
+          p_error?: string
+          p_http_status?: number
+          p_job_id: string
+          p_outcome: Database["public"]["Enums"]["log_outcome"]
+          p_request_summary?: Json
+          p_worker_id: string
+        }
+        Returns: number
+      }
       record_verification: {
         Args: {
           p_checks: Json

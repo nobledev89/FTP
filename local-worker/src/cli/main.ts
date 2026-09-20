@@ -105,6 +105,7 @@ async function main(): Promise<number> {
         secret: env.REVALIDATION_SECRET,
         timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
       }),
+      logger,
     ),
     verifier: new VerificationService(client, {
       publicSiteUrl: env.PUBLIC_SITE_URL,

@@ -85,6 +85,7 @@ Design rules enforced by the database:
 | `fail_stage`             | `retry` (back to pending with `next_attempt_at`), `failed`, or `needs_human`; auth and usage-limit errors cannot retry |
 | `publish_article`        | The publication boundary (plan section 8.3); marks copied images published and snapshots the approved draft            |
 | `record_verification`    | Logs each live check; `VERIFIED` only when all eight pass, otherwise stays `PUBLISHED` and retries                     |
+| `record_revalidation`    | Records one cache-invalidation attempt against a published article; never changes job or article state                 |
 | `recover_expired_leases` | Returns expired work to its pending status, or `FAILED` after the final attempt                                        |
 | `worker_status`          | Read-only heartbeat, thresholds, and exact queue-health snapshot for the configured worker                             |
 

@@ -66,12 +66,20 @@ Mock jobs can exercise exceptional branches from the article keywords field:
 
 The mock image stage creates real deterministic PNG bytes, stores them privately, and uses the same
 public-copy service as a future image adapter. After `publish_article` commits, the publishing
-service sends a timestamped, nonce-bound HMAC request to `PUBLIC_SITE_URL/api/revalidate`. A failed
-cache request never rolls back an already published snapshot; the live verifier remains the
-correctness backstop and schedules a bounded retry if the page is not fresh or reachable. Live
-verification fetches the real `/blog/[slug]` page and checks its status, canonical URL, title, body,
-hero, metadata, Article JSON-LD, and placeholder markers before `record_verification` may advance the
-job to `VERIFIED`.
+service sends a timestamped, nonce-bound HMAC request to `PUBLIC_SITE_URL/api/revalidate`, retrying
+transport failures, `429`, and `5xx` up to three times with a fresh signature each time; a rejected
+signature is not retried. Every attempt is recorded through `record_revalidation` as a `revalidate`
+row in `publishing_logs`. A failed cache request never rolls back an already published snapshot; the
+live verifier remains the correctness backstop and schedules a bounded retry if the page is not
+fresh or reachable.
+
+Live verification fetches the real `/blog/[slug]` page and checks its status, canonical URL, title,
+body, hero, metadata, Article JSON-LD, and placeholder markers before `record_verification` may
+advance the job to `VERIFIED`. `hero_image_ok` resolves the hero the page actually rendered and
+fetches it (`HEAD`, falling back to `GET`), so an article whose public image copy never landed fails
+verification instead of passing as a partially available page. Failed attempts back off on the
+`verify` stage schedule, which `record_verification` clamps to between now and one hour out; once the
+attempts are exhausted the job raises `verification_failed` naming the checks that failed.
 
 Exit codes are stable shell contracts:
 

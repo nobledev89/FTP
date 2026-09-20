@@ -496,6 +496,9 @@ test.describe("authenticated admin console", () => {
       .eq("job_id", publicJobId);
     expect(logs.error).toBeNull();
     expect(logs.data?.filter((entry) => entry.kind === "verify_check")).toHaveLength(8);
+    // The worker signed a real revalidation request against this running site and it was accepted,
+    // while the unsigned request above was refused.
+    expect(logs.data?.filter((entry) => entry.kind === "revalidate")).toHaveLength(1);
     expect(logs.data?.every((entry) => entry.outcome === "succeeded")).toBe(true);
   });
 

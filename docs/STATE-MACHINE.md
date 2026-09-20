@@ -51,6 +51,12 @@ or audit when no images were requested. A passing audit records the exact approv
 Automatic publication may queue a future schedule; otherwise an approved job waits for an explicit
 schedule or publish policy.
 
+`desired_publish_at` is an instant, never a local reading: the console converts the editor's local
+time using the site timezone, and the queue compares instants, so a repeated or skipped local hour is
+never ambiguous. A schedule more than a year out is rejected with `FT005` rather than parked in the
+queue where no worker would ever claim it. Claim eligibility and publication eligibility are checked
+independently, so rescheduling a job a worker already holds still cannot publish it early.
+
 ## Exceptional paths
 
 ### Pause and resume

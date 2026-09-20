@@ -130,6 +130,37 @@ export function imagesWithAlt(html: string): number {
     .length;
 }
 
+/**
+ * The URL of the first image the page renders with alt text, resolved against the page itself.
+ *
+ * The hero is taken from the served HTML rather than from the database row so that verification
+ * follows the reader's path: whatever `src` the page emitted is what a browser will request, and
+ * that is the URL whose availability decides `hero_image_ok`. `srcset` is deliberately ignored —
+ * `src` is the fallback every client fetches.
+ */
+export function heroImageUrl(html: string, pageUrl: string): string | null {
+  for (const tag of findTags(html, "img")) {
+    if ((attribute(tag, "alt") ?? "").trim().length === 0) continue;
+    const src = (attribute(tag, "src") ?? "").trim();
+    if (src.length === 0 || src.startsWith("data:")) continue;
+    try {
+      return new URL(src, pageUrl).toString();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** The result of fetching the hero image the page asked for. */
+export type HeroAsset = Readonly<{
+  url: string;
+  status: number;
+  contentType: string | null;
+  durationMs: number;
+  error?: string;
+}>;
+
 export function jsonLdBlocks(html: string): readonly unknown[] {
   const blocks: unknown[] = [];
   const pattern =
@@ -167,10 +198,69 @@ function hasArticleNode(value: unknown, headline: string): boolean {
   return typeof nodeHeadline === "string" && normalize(nodeHeadline) === normalize(headline);
 }
 
-/** Runs all eight checks. The order is fixed so the logs read the same way on every attempt. */
+type SharedFields = Readonly<{ http_status?: number; duration_ms: number }>;
+
+/**
+ * `hero_image_ok` asks two questions: did the page render an image a reader can perceive, and does
+ * that image actually resolve? A public Storage copy that never landed leaves the article HTML
+ * intact and the picture broken, which is exactly the partially available page verification exists
+ * to catch, so the check reports the image's own status rather than the page's.
+ */
+function heroCheck(
+  html: string,
+  hero: HeroAsset | null,
+  pageShared: SharedFields,
+): VerificationCheck {
+  const withAlt = imagesWithAlt(html);
+  if (withAlt === 0) {
+    return {
+      ...pageShared,
+      name: "hero_image_ok",
+      outcome: "failed",
+      detail: "0 images with alt text",
+      error: "No image with alt text was rendered",
+    };
+  }
+  if (!hero) {
+    return {
+      ...pageShared,
+      name: "hero_image_ok",
+      outcome: "failed",
+      detail: `${withAlt} images with alt text`,
+      error: "The hero image was not resolved from the page",
+    };
+  }
+
+  const contentType = hero.contentType ?? "";
+  const ok =
+    hero.status >= 200 && hero.status < 300 && contentType.toLowerCase().startsWith("image/");
+  return {
+    ...(hero.status >= 100 && hero.status <= 599 ? { http_status: hero.status } : {}),
+    duration_ms: hero.durationMs,
+    name: "hero_image_ok",
+    outcome: ok ? "succeeded" : "failed",
+    detail: `${withAlt} images with alt text; ${hero.url} responded ${hero.status} ${contentType || "without a content type"}`,
+    ...(ok
+      ? {}
+      : {
+          error:
+            hero.error ??
+            `The hero image responded ${hero.status} ${contentType || "without a content type"}`,
+        }),
+  };
+}
+
+/**
+ * Runs all eight checks. The order is fixed so the logs read the same way on every attempt.
+ *
+ * `heroAsset` is the outcome of fetching the hero image the page referenced, which the caller does
+ * because it needs the network. Omitting it when an image is expected fails `hero_image_ok`: a
+ * check that could not be evaluated must never be reported as a pass.
+ */
 export function evaluatePage(
   response: PageResponse,
   target: VerificationTarget,
+  heroAsset?: HeroAsset | null,
 ): readonly VerificationCheck[] {
   // A transport failure uses status 0 locally. Omit it from the stored check because the database
   // accepts HTTP response codes only (100-599), while still recording the failed outcome.
@@ -242,14 +332,7 @@ export function evaluatePage(
       detail: "The job requested no images",
     });
   } else {
-    const withAlt = imagesWithAlt(html);
-    checks.push({
-      ...shared,
-      name: "hero_image_ok",
-      outcome: withAlt > 0 ? "succeeded" : "failed",
-      detail: `${withAlt} images with alt text`,
-      ...(withAlt > 0 ? {} : { error: "No image with alt text was rendered" }),
-    });
+    checks.push(heroCheck(html, heroAsset ?? null, shared));
   }
 
   const description = metaDescription(html);
