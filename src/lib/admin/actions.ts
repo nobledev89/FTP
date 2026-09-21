@@ -654,6 +654,7 @@ const discoverySettingsSchema = z.object({
   intervalMinutes: z.coerce.number().int().min(15).max(720),
   imageCount: z.coerce.number().int().min(0).max(1),
   autoPublish: z.boolean(),
+  spacingMinutes: z.coerce.number().int().min(5).max(240),
   targets: z.array(
     z.object({ categoryId: uuidSchema, dailyTarget: z.coerce.number().int().min(0).max(12) }),
   ),
@@ -680,6 +681,7 @@ export async function updateDiscoverySettingsAction(
       intervalMinutes: formData.get("intervalMinutes"),
       imageCount: formData.get("imageCount"),
       autoPublish: formData.get("autoPublish") === "on",
+      spacingMinutes: formData.get("spacingMinutes"),
       targets,
     });
     if (!parsed.success) {
@@ -699,6 +701,7 @@ export async function updateDiscoverySettingsAction(
       p_interval_minutes: parsed.data.intervalMinutes,
       p_image_count: parsed.data.imageCount,
       p_auto_publish: parsed.data.autoPublish,
+      p_spacing_minutes: parsed.data.spacingMinutes,
     });
     if (error) throw error;
     for (const target of parsed.data.targets) {
@@ -715,7 +718,9 @@ export async function updateDiscoverySettingsAction(
       ok: true,
       message: parsed.data.enabled
         ? `Discovery is on: up to ${total} article${total === 1 ? "" : "s"} a day${
-            parsed.data.autoPublish ? ", published as soon as each passes its check" : ""
+            parsed.data.autoPublish
+              ? `, published ${parsed.data.spacingMinutes} minutes apart once each passes its check`
+              : ""
           }.`
         : "Discovery settings saved. Discovery is off.",
     };

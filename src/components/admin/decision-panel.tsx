@@ -30,6 +30,16 @@ const DOING = {
   publish: "publishing",
 } as const satisfies Record<EditorialStep, string>;
 
+/**
+ * Why an article the worker could have published on its own was left for the editor
+ * (`article_jobs.auto_publish_hold_reason`). Each one is a decision the editor can now make.
+ */
+const HOLD_REASON = {
+  no_image: "It has no image, and articles are not published automatically without one.",
+  duplicate: "It tells a story the site has already published.",
+  daily_cap: "The day's article count was already used up.",
+} as const satisfies Record<NonNullable<ArticleJob["auto_publish_hold_reason"]>, string>;
+
 type Summary = Readonly<{ headline: string; detail?: ReactNode }>;
 
 function describe(
@@ -60,6 +70,12 @@ function describe(
         return {
           headline: "Publishing automatically.",
           detail: "The worker picks it up on its next poll, usually within a minute.",
+        };
+      }
+      if (job.auto_publish_hold_reason) {
+        return {
+          headline: "Ready, but not published automatically.",
+          detail: `${HOLD_REASON[job.auto_publish_hold_reason]} Read it below, then publish, schedule, or discard it.`,
         };
       }
       return {

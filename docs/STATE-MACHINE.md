@@ -51,11 +51,28 @@ or audit when no images were requested. A passing audit records the exact approv
 Automatic publication may queue a future schedule; otherwise an approved job waits for an explicit
 schedule or publish policy.
 
-An `APPROVED` job with `auto_publish` and no time is claimable immediately; that is what the
-opt-in `site_settings.discovery_auto_publish` sets on discovered jobs when they are created, so a
-discovered article can go live on its passing audit without an editor. It is off by default, and
+An `APPROVED` job with `auto_publish` and no time is claimable immediately. That is what
+`site_settings.discovery_auto_publish` sets on discovered jobs when they are created, so a
+discovered article can go live on its passing audit without an editor. It is on by default, and
 the value is fixed on each job at creation, so changing it never moves work already in the
 pipeline.
+
+For a discovered job, `private.complete_stage_core` applies the automatic publication policy
+(migration `20260921190000`) the moment the audit passes, before the automatic follow-on
+transitions run. An article publishes by itself only when it has a ready hero image in slot 0, its
+headline does not restate an article already live or already scheduled, and the day it would
+appear on is still inside the publication's articles-per-day count (the sum of the topic
+categories' daily targets). It is then given the first slot at least
+`site_settings.auto_publish_spacing_minutes` (15 by default) after the most recent publication or
+pending schedule, which the existing `APPROVED → SCHEDULED` rule picks up; the first article of a
+quiet period is due immediately and stays `APPROVED`.
+
+An article that fails a check keeps its place instead: `auto_publish` is cleared,
+`auto_publish_hold_reason` records `no_image`, `duplicate`, or `daily_cap`, a
+`job.auto_publish_held` event is appended, and the article waits at `APPROVED` for an editor, who
+sees the reason on its dashboard card. The policy never touches an editor's own job
+(`origin = 'editor'`), and neither **Publish now** nor `admin_reschedule_job` consults it, so
+hands-on publication is always immediate.
 
 `desired_publish_at` is an instant, never a local reading: the console converts the editor's local
 time using the site timezone, and the queue compares instants, so a repeated or skipped local hour is

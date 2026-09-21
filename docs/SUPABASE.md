@@ -27,31 +27,34 @@ After changing a migration, run `pnpm supabase:reset`, `pnpm db:lint`, `pnpm db:
 
 Migrations run in order:
 
-| File                                             | Contents                                                                                                                                                           |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `20260917100000_foundation.sql`                  | `private` schema, default-privilege hardening, enums, pure helpers, history guards                                                                                 |
-| `20260917100100_identity_and_config.sql`         | `sites`, `admin_users`, authorization helpers, `prompt_templates`, `site_settings`, `provider_settings`, `worker_instances`                                        |
-| `20260917100200_content_and_artifacts.sql`       | `article_jobs`, `provider_runs`, research artifacts, `drafts`, `audits`, `images`, `articles`, slug aliases, `job_events`, `publishing_logs`, `originality_checks` |
-| `20260917100300_state_machine_and_queue.sql`     | Transition map, job/article guards, worker functions, publication boundary, admin functions, owner bootstrap                                                       |
-| `20260917100400_rls_and_grants.sql`              | RLS on every table, explicit grants, policies                                                                                                                      |
-| `20260917100500_storage.sql`                     | `article-work` and `article-public` buckets and policies                                                                                                           |
-| `20260917100600_indexes.sql`                     | Queue, lease, dashboard, public list, and timeline indexes                                                                                                         |
-| `20260918100000_admin_console.sql`               | Admin membership helpers, `admin_dashboard`, `admin_update_site_settings`, `admin_update_site_identity`                                                            |
-| `20260918110000_worker_status.sql`               | Read-only worker heartbeat and exact queue-health snapshot                                                                                                         |
-| `20260918120000_mock_pipeline.sql`               | Authorized immutable prompt-version creation, activation, and rollback                                                                                             |
-| `20260918130000_manual_workflows.sql`            | Authorized manual import and image continuation, abandoned-run cancellation, implemented-mode provider defaults                                                    |
-| `20260918140000_subscription_cli_modes.sql`      | Enables the stage-specific Claude Code and Codex defaults                                                                                                          |
-| `20260918150000_api_provider_modes.sql`          | Enables stage-specific API defaults only with recorded metered-cost confirmation                                                                                   |
-| `20260921100000_publishing_hardening.sql`        | Schedule horizon, revalidation logs, bounded verification retries                                                                                                  |
-| `20260921110000_direct_manual_image_uploads.sql` | Limits editor Storage inserts to the current manual image job/run/slot for direct uploads                                                                          |
-| `20260921120000_article_withdrawal.sql`          | `admin_withdraw_article`: takes a live article off the site and cancels its verification                                                                           |
-| `20260921130000_codex_image_mode.sql`            | `codex_image` provider mode for the images stage                                                                                                                   |
-| `20260921130100_codex_image_mode_rules.sql`      | Mode rules and console selection for `codex_image`                                                                                                                 |
-| `20260921140000_discarded_status.sql`            | Terminal `DISCARDED` status and its transitions                                                                                                                    |
-| `20260921140100_discard_job.sql`                 | `admin_discard_job`: turns down an unpublished article with a required reason                                                                                      |
-| `20260921150000_topic_discovery.sql`             | Topic categories, discovery settings and runs, job provenance, worker discovery functions                                                                          |
-| `20260921160000_seed_topic_discovery_prompt.sql` | Seeds the `topic-discovery` prompt on databases created before it                                                                                                  |
-| `20260921170000_editor_desk.sql`                 | `admin_reschedule_job` (publish now or move a scheduled time) and opt-in auto-publish for discovered articles                                                      |
+| File                                                | Contents                                                                                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `20260917100000_foundation.sql`                     | `private` schema, default-privilege hardening, enums, pure helpers, history guards                                                                                 |
+| `20260917100100_identity_and_config.sql`            | `sites`, `admin_users`, authorization helpers, `prompt_templates`, `site_settings`, `provider_settings`, `worker_instances`                                        |
+| `20260917100200_content_and_artifacts.sql`          | `article_jobs`, `provider_runs`, research artifacts, `drafts`, `audits`, `images`, `articles`, slug aliases, `job_events`, `publishing_logs`, `originality_checks` |
+| `20260917100300_state_machine_and_queue.sql`        | Transition map, job/article guards, worker functions, publication boundary, admin functions, owner bootstrap                                                       |
+| `20260917100400_rls_and_grants.sql`                 | RLS on every table, explicit grants, policies                                                                                                                      |
+| `20260917100500_storage.sql`                        | `article-work` and `article-public` buckets and policies                                                                                                           |
+| `20260917100600_indexes.sql`                        | Queue, lease, dashboard, public list, and timeline indexes                                                                                                         |
+| `20260918100000_admin_console.sql`                  | Admin membership helpers, `admin_dashboard`, `admin_update_site_settings`, `admin_update_site_identity`                                                            |
+| `20260918110000_worker_status.sql`                  | Read-only worker heartbeat and exact queue-health snapshot                                                                                                         |
+| `20260918120000_mock_pipeline.sql`                  | Authorized immutable prompt-version creation, activation, and rollback                                                                                             |
+| `20260918130000_manual_workflows.sql`               | Authorized manual import and image continuation, abandoned-run cancellation, implemented-mode provider defaults                                                    |
+| `20260918140000_subscription_cli_modes.sql`         | Enables the stage-specific Claude Code and Codex defaults                                                                                                          |
+| `20260918150000_api_provider_modes.sql`             | Enables stage-specific API defaults only with recorded metered-cost confirmation                                                                                   |
+| `20260921100000_publishing_hardening.sql`           | Schedule horizon, revalidation logs, bounded verification retries                                                                                                  |
+| `20260921110000_direct_manual_image_uploads.sql`    | Limits editor Storage inserts to the current manual image job/run/slot for direct uploads                                                                          |
+| `20260921120000_article_withdrawal.sql`             | `admin_withdraw_article`: takes a live article off the site and cancels its verification                                                                           |
+| `20260921130000_codex_image_mode.sql`               | `codex_image` provider mode for the images stage                                                                                                                   |
+| `20260921130100_codex_image_mode_rules.sql`         | Mode rules and console selection for `codex_image`                                                                                                                 |
+| `20260921140000_discarded_status.sql`               | Terminal `DISCARDED` status and its transitions                                                                                                                    |
+| `20260921140100_discard_job.sql`                    | `admin_discard_job`: turns down an unpublished article with a required reason                                                                                      |
+| `20260921150000_topic_discovery.sql`                | Topic categories, discovery settings and runs, job provenance, worker discovery functions                                                                          |
+| `20260921160000_seed_topic_discovery_prompt.sql`    | Seeds the `topic-discovery` prompt on databases created before it                                                                                                  |
+| `20260921170000_editor_desk.sql`                    | `admin_reschedule_job` (publish now or move a scheduled time) and opt-in auto-publish for discovered articles                                                      |
+| `20260921180000_editorial_illustration_prompts.sql` | House illustration style for generated article images                                                                                                              |
+| `20260921180100_hero_image_replacement.sql`         | Replacing the hero image on a live article                                                                                                                         |
+| `20260921190000_auto_publish_policy.sql`            | Automatic publication policy: hero, duplicate, and daily-count checks, 15-minute spacing, `auto_publish_hold_reason`                                               |
 
 Design rules enforced by the database:
 

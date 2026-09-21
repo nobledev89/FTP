@@ -7,6 +7,7 @@ import { siteConfig } from "@/lib/site/config";
 import { toWorkflowError } from "@/lib/state-machine/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  autoPublishHoldReasonSchema,
   discoverySourceSchema,
   jsonObjectSchema,
   nullableTimestampSchema,
@@ -27,6 +28,7 @@ const settingsSchema = z
     discovery_interval_minutes: z.number().int(),
     discovery_image_count: z.number().int(),
     discovery_auto_publish: z.boolean(),
+    auto_publish_spacing_minutes: z.number().int(),
     discovery_last_started_at: nullableTimestampSchema,
   })
   .strict();
@@ -65,6 +67,7 @@ const reviewSchema = z
     origin: z.enum(["editor", "discovery"]),
     discovery_source: discoverySourceSchema.nullable(),
     approved_draft_id: uuidSchema.nullable(),
+    auto_publish_hold_reason: autoPublishHoldReasonSchema.nullable(),
     lock_version: z.number().int().nonnegative(),
     updated_at: timestampSchema,
   })
@@ -103,7 +106,7 @@ export async function getDiscoveryOverview(
     client
       .from("site_settings")
       .select(
-        "discovery_enabled, discovery_interval_minutes, discovery_image_count, discovery_auto_publish, discovery_last_started_at",
+        "discovery_enabled, discovery_interval_minutes, discovery_image_count, discovery_auto_publish, auto_publish_spacing_minutes, discovery_last_started_at",
       )
       .eq("site_id", siteId)
       .maybeSingle(),
@@ -161,7 +164,7 @@ export async function listReadyForReview(siteId: string): Promise<readonly Revie
   const { data, error } = await client
     .from("article_jobs")
     .select(
-      "id, topic, category, origin, discovery_source, approved_draft_id, lock_version, updated_at",
+      "id, topic, category, origin, discovery_source, approved_draft_id, auto_publish_hold_reason, lock_version, updated_at",
     )
     .eq("site_id", siteId)
     .eq("status", "APPROVED")

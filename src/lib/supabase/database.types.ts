@@ -67,6 +67,7 @@ export type Database = {
           attempt_count: number
           audit_mode: Database["public"]["Enums"]["provider_mode"]
           auto_publish: boolean
+          auto_publish_hold_reason: string | null
           byline_name: string | null
           byline_role: string | null
           category: string | null
@@ -116,6 +117,7 @@ export type Database = {
           attempt_count?: number
           audit_mode: Database["public"]["Enums"]["provider_mode"]
           auto_publish?: boolean
+          auto_publish_hold_reason?: string | null
           byline_name?: string | null
           byline_role?: string | null
           category?: string | null
@@ -165,6 +167,7 @@ export type Database = {
           attempt_count?: number
           audit_mode?: Database["public"]["Enums"]["provider_mode"]
           auto_publish?: boolean
+          auto_publish_hold_reason?: string | null
           byline_name?: string | null
           byline_role?: string | null
           category?: string | null
@@ -1347,6 +1350,7 @@ export type Database = {
       site_settings: {
         Row: {
           auto_publish_default: boolean
+          auto_publish_spacing_minutes: number
           created_at: string
           default_byline_name: string
           default_byline_role: string | null
@@ -1369,6 +1373,7 @@ export type Database = {
         }
         Insert: {
           auto_publish_default?: boolean
+          auto_publish_spacing_minutes?: number
           created_at?: string
           default_byline_name?: string
           default_byline_role?: string | null
@@ -1391,6 +1396,7 @@ export type Database = {
         }
         Update: {
           auto_publish_default?: boolean
+          auto_publish_spacing_minutes?: number
           created_at?: string
           default_byline_name?: string
           default_byline_role?: string | null
@@ -1821,6 +1827,7 @@ export type Database = {
           p_enabled: boolean
           p_image_count: number
           p_interval_minutes: number
+          p_spacing_minutes?: number
         }
         Returns: undefined
       }

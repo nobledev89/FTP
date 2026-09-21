@@ -56,6 +56,8 @@ describe("migrations", () => {
     `);
     expect(executable).toEqual([
       { role: "authenticated", name: "admin_activate_prompt_template" },
+      { role: "authenticated", name: "admin_attach_hero_replacement_image" },
+      { role: "authenticated", name: "admin_cancel_hero_replacement" },
       { role: "authenticated", name: "admin_complete_manual_images" },
       { role: "authenticated", name: "admin_create_prompt_version" },
       { role: "authenticated", name: "admin_dashboard" },
@@ -63,7 +65,9 @@ describe("migrations", () => {
       { role: "authenticated", name: "admin_import_manual_image" },
       { role: "authenticated", name: "admin_import_manual_result" },
       { role: "authenticated", name: "admin_request_discovery_scan" },
+      { role: "authenticated", name: "admin_request_hero_replacement" },
       { role: "authenticated", name: "admin_reschedule_job" },
+      { role: "authenticated", name: "admin_review_hero_replacement" },
       { role: "authenticated", name: "admin_transition_job" },
       { role: "authenticated", name: "admin_update_discovery_settings" },
       { role: "authenticated", name: "admin_update_provider_setting" },
@@ -114,6 +118,7 @@ describe("migrations", () => {
       { role: "authenticated", name: "admin_role" },
       { role: "authenticated", name: "can_edit" },
       { role: "authenticated", name: "is_admin" },
+      { role: "authenticated", name: "is_hero_replacement_upload_path" },
       { role: "authenticated", name: "is_manual_image_upload_path" },
       { role: "service_role", name: "is_active_status" },
       { role: "service_role", name: "is_api_mode" },

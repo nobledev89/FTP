@@ -245,6 +245,7 @@ export async function draft(
   options: {
     version?: number;
     slug?: string;
+    title?: string;
     sourceIds?: string[];
     respondsToAuditId?: string;
     valid?: boolean;
@@ -260,7 +261,7 @@ export async function draft(
         version: options.version ?? 1,
         research_packet_id: packetId,
         responds_to_audit_id: options.respondsToAuditId ?? null,
-        title: "How pay-by-bank changes checkout",
+        title: options.title ?? "How pay-by-bank changes checkout",
         slug: options.slug ?? `pay-by-bank-${randomUUID().slice(0, 8)}`,
         excerpt: "A test excerpt for integration.",
         body_markdown: "## Heading\n\nBody text for the integration test article.",
@@ -345,40 +346,56 @@ export async function readyImage(jobId: string, slot = 0): Promise<string> {
 /** Runs a job through research, draft, optional images, and a passing audit. */
 export async function runToApproved(
   admin: TestUser,
-  options: JobOptions & { slug?: string } = {},
+  options: JobOptions & { slug?: string; title?: string } = {},
 ): Promise<{ jobId: string; draftId: string; imageIds: string[]; sourceIds: string[] }> {
   const jobId = await createJob(admin, options);
   await unwrap(adminAction(admin, jobId, "start"));
+  return runStartedToApproved(jobId, options);
+}
 
-  let claimed = await claimFor(jobId);
+/** The pipeline half of `runToApproved`, for jobs that were created some other way. */
+export async function runStartedToApproved(
+  jobId: string,
+  options: JobOptions & { slug?: string; title?: string } = {},
+): Promise<{ jobId: string; draftId: string; imageIds: string[]; sourceIds: string[] }> {
+  let claimed = await claimFor(jobId, WORKER_A, ["research"]);
   const { packetId, sourceIds } = await researchPacket(jobId);
   await unwrap(complete(claimed, "RESEARCH_COMPLETE"));
 
-  claimed = await claimFor(jobId);
+  claimed = await claimFor(jobId, WORKER_A, ["draft"]);
   const draftId = await draft(jobId, packetId, {
     sourceIds,
     ...(options.slug ? { slug: options.slug } : {}),
+    ...(options.title ? { title: options.title } : {}),
   });
   await unwrap(complete(claimed, "DRAFT_COMPLETE"));
 
   const imageIds: string[] = [];
   if ((options.imageCount ?? 0) > 0) {
-    claimed = await claimFor(jobId);
+    claimed = await claimFor(jobId, WORKER_A, ["images"]);
     for (let slot = 0; slot < (options.imageCount ?? 0); slot += 1) {
       imageIds.push(await readyImage(jobId, slot));
     }
     await unwrap(complete(claimed, "AUDIT_PENDING"));
   }
 
-  claimed = await claimFor(jobId);
+  claimed = await claimFor(jobId, WORKER_A, ["audit"]);
   await audit(jobId, draftId, "PASS");
   await unwrap(complete(claimed, "APPROVED"));
   return { jobId, draftId, imageIds, sourceIds };
 }
 
-/** Claims until the given job is returned, failing if another job is claimed instead. */
-export async function claimFor(jobId: string, workerId = WORKER_A): Promise<Claim> {
-  const claimed = await claim(workerId);
+/**
+ * Claims the given job, failing if another job is claimed instead. `stages` narrows the claim to
+ * one pipeline stage, which a test needs when another job of its own is already sitting in the
+ * publish queue: the queue offers publishable work first.
+ */
+export async function claimFor(
+  jobId: string,
+  workerId = WORKER_A,
+  stages?: Stage[],
+): Promise<Claim> {
+  const claimed = await claim(workerId, stages);
   if (!claimed || claimed.job_id !== jobId) {
     throw new Error(`expected to claim ${jobId}, got ${JSON.stringify(claimed)}`);
   }

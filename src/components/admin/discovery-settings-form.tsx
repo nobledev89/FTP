@@ -11,8 +11,12 @@ import { SubmitButton } from "./submit-button";
 /**
  * Topic discovery settings: the on/off switch, how often the worker scans, whether discovered
  * articles get a ChatGPT hero image, whether they publish on their own once their audit passes,
- * and each category's daily target. Auto-publish is off by default, so discovered articles stop at
- * APPROVED for an editor to publish, schedule, or discard.
+ * how far apart automatic articles are spaced, and each category's daily target.
+ *
+ * Automatic publishing is on by default and needs a hero image, so the database refuses the
+ * combination of automatic publishing with no image rather than silently holding every article.
+ * An article that is a repeat of a live story, or that would exceed the day's article count, is
+ * left under Needs your decision with the reason on its card.
  */
 
 type Category = Readonly<{
@@ -28,6 +32,7 @@ type DiscoverySettingsFormProps = {
   intervalMinutes: number;
   imageCount: number;
   autoPublish: boolean;
+  spacingMinutes: number;
   categories: readonly Category[];
   canEdit: boolean;
 };
@@ -37,6 +42,7 @@ export function DiscoverySettingsForm({
   intervalMinutes,
   imageCount,
   autoPublish,
+  spacingMinutes,
   categories,
   canEdit,
 }: DiscoverySettingsFormProps) {
@@ -58,7 +64,7 @@ export function DiscoverySettingsForm({
           />
           <CheckboxField
             defaultChecked={autoPublish}
-            hint="Off: each article waits under Needs your decision until you publish, schedule, or discard it. On: it goes live as soon as it passes its check, and you can still withdraw it. Applies to articles found from now on."
+            hint="On: an article goes live once it passes its check, as long as it has an image, is not a story the site already has, and the day still has room. Anything held waits under Needs your decision with the reason. Off: every article waits for you. Applies to articles found from now on."
             id="discoveryAutoPublish"
             label="Publish discovered articles automatically"
             name="autoPublish"
@@ -82,7 +88,7 @@ export function DiscoverySettingsForm({
               />
             </Field>
             <Field
-              hint="Generated with ChatGPT through Codex on the worker PC. No watermark."
+              hint="Generated with ChatGPT through Codex on the worker PC. No watermark. Automatic publishing needs one."
               htmlFor="imageCount"
               label="Hero image"
             >
@@ -96,6 +102,23 @@ export function DiscoverySettingsForm({
                 <option value="1">One ChatGPT image per article</option>
                 <option value="0">No image</option>
               </select>
+            </Field>
+            <Field
+              hint="The gap between two articles published automatically, so the front page fills through the day instead of all at once. Publishing an article yourself ignores it."
+              htmlFor="spacingMinutes"
+              label="Space articles (minutes apart)"
+            >
+              <input
+                aria-describedby="spacingMinutes-hint"
+                className={controlClass}
+                defaultValue={spacingMinutes}
+                id="spacingMinutes"
+                max={240}
+                min={5}
+                name="spacingMinutes"
+                required
+                type="number"
+              />
             </Field>
           </div>
         </fieldset>

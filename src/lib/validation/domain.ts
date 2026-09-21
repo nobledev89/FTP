@@ -39,6 +39,11 @@ export const actionRequiredKindSchema = z.enum([
   "publish_conflict",
   "verification_failed",
 ]);
+/**
+ * Why automatic publication was declined for a discovered article
+ * (`article_jobs.auto_publish_hold_reason`, migration 20260921190000).
+ */
+export const autoPublishHoldReasonSchema = z.enum(["no_image", "duplicate", "daily_cap"]);
 export const errorClassSchema = z.enum([
   "transient",
   "rate_limit",
@@ -108,6 +113,7 @@ export const articleJobSchema = z
     origin: z.enum(["editor", "discovery"]),
     topic_category_id: uuidSchema.nullable(),
     discovery_source: discoverySourceSchema.nullable(),
+    auto_publish_hold_reason: autoPublishHoldReasonSchema.nullable(),
   })
   .strict()
   .superRefine((job, context) => {

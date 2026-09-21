@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | The console was rebuilt around the editor's decisions: publish now, a readable draft, plain statuses, and opt-in auto-publish for discovery. |
-| Last updated           | 2026-09-21 18:20, Asia/Singapore                                     |
+| Current task           | Discovered articles publish themselves under a policy: complete and illustrated, not a repeat, inside the day's article count, and spaced 15 minutes apart. |
+| Last updated           | 2026-09-21 19:25, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
 | Active blockers        | Production database writes must be run by the owner (auto mode refuses them). |
-| Next action            | Owner applies `20260921160000_seed_topic_discovery_prompt.sql` and `20260921170000_editor_desk.sql`, sets category targets, and takes the first discovered article to `VERIFIED` from the new dashboard. |
+| Next action            | Owner applies `20260921190000_auto_publish_policy.sql`, confirms the category targets are the intended articles-per-day count, and watches the first discovered article schedule itself and go live. |
 
 ## Status legend
 
@@ -340,6 +340,84 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Automatic publication policy for discovered articles
+
+Date/time: 2026-09-21 19:25, Asia/Singapore
+
+Phase/task: Phase 12 — owner asked for generated articles to publish themselves, within limits
+
+Status change: Phase 12 remains `IN_PROGRESS`.
+
+What changed: `discovery_auto_publish` (added 2026-09-21 as an opt-in switch) published a
+discovered article the instant its audit passed: immediately, however many had already gone out
+that day, and with no check that the same story was already on the front page. Migration
+`20260921190000_auto_publish_policy.sql` turns the switch into a policy and turns it on by
+default. A discovered article now publishes by itself only when all of these hold:
+
+- **Complete.** A PASS audit over the approved draft, which the `APPROVED` gate already enforces.
+- **Illustrated.** A ready image in slot 0. Because a job can be created asking for no image,
+  `admin_update_discovery_settings` now refuses automatic publishing together with **No image**
+  rather than holding every article and never saying why.
+- **Not a repeat.** `private.duplicate_headline` compares the approved draft's headline against
+  articles already live and jobs already committed to publication, over 30 days. Headlines are
+  reduced to their distinctive words (four characters or more, ordinary connectives dropped) and
+  compared as sets; 0.6 Jaccard overlap or more is a repeat. No extension, no embedding: the check
+  has to be explainable to the owner, and holding an article costs one click while publishing a
+  second copy of a story costs credibility. Discovery runs the same check on a proposed story, so
+  the second outlet's version of a story is never written at all — the existing unique index on
+  the source URL only ever caught the same report twice.
+- **Inside the day's count.** The sum of the topic categories' daily targets, measured against
+  everything published or scheduled for the day the article would actually appear on, which is not
+  always today.
+
+Articles that pass are spaced `site_settings.auto_publish_spacing_minutes` apart (15 by default,
+5–240) from the most recent publication or pending schedule, so the front page fills through the
+day; the first article of a quiet period is still due immediately. An article that fails a check
+keeps its place: `auto_publish` is cleared, `auto_publish_hold_reason` records `no_image`,
+`duplicate`, or `daily_cap`, a `job.auto_publish_held` event is appended, and the article waits
+under **Needs your decision** with the reason on its card and in its decision panel. The policy is
+applied in `private.complete_stage_core` before the automatic follow-on transitions, so the
+existing `APPROVED → SCHEDULED` rule picks up the slot and the transition map is untouched.
+
+The policy reads `origin = 'discovery'` only. An editor's own auto-publishing job behaves exactly
+as before, and **Publish now** and `admin_reschedule_job` never consult it, so hands-on
+publication stays immediate however full the schedule is.
+
+Files/migrations affected: `supabase/migrations/20260921190000_auto_publish_policy.sql`; generated
+database types; `src/lib/validation/domain.ts`, `src/lib/admin/discovery.ts`,
+`src/lib/admin/actions.ts`; `src/components/admin/decision-panel.tsx`,
+`discovery-settings-form.tsx`; the dashboard and settings pages;
+`tests/integration/auto-publish.test.ts` (new), `tests/integration/helpers/workflow.ts`,
+`tests/integration/schema.test.ts`; `docs/STATE-MACHINE.md`, `docs/ADMIN-CONSOLE.md`,
+`docs/SUPABASE.md`, this file.
+
+Verification performed: `supabase db reset --local` applies all 25 migrations and the seed;
+`pnpm db:lint` clean; 424 unit tests; 190 integration tests, including 11 new ones covering the
+immediate first article, 15-minute and owner-set spacing, the no-image hold, a retold story held
+while two genuinely different stories about one company both run, the daily-count hold, an
+editor's job left alone, discovery refusing to write the second outlet's copy of a story, the
+settings refusal, and hands-on publishing ignoring the spacing. Format, lint, and typecheck pass.
+Two assertions in `schema.test.ts` were stale from the hero-replacement commit (the four
+`admin_*_hero_replacement` functions and `is_hero_replacement_upload_path` were missing from the
+expected grant lists) and were corrected here; they failed on `main` before this change.
+
+Result: Passed.
+
+Deployed the same day: the owner authorised the deploy, `supabase db push --linked` applied
+`20260921190000_auto_publish_policy.sql` to `vobxocvjsdkcabhbdvvv` after a dry run listing only
+that migration, and a follow-up dry run reports the remote up to date. The code was then pushed to
+`main` for Vercel. Order was deliberate: the console reads `auto_publish_hold_reason` and
+`auto_publish_spacing_minutes`, so the schema had to move first.
+
+Still unproven: no discovered article has yet gone through the policy against the live pipeline.
+The daily count is now the sum of the category targets, and the worker must be running for any
+article to reach its audit at all.
+
+Commit/PR: on `main`.
+
+Next action: Owner confirms the category targets are the intended articles-per-day count, then
+watches the first discovered article schedule itself and go live.
 
 ### 2026-09-21 — Editorial illustration house style and hero image replacement
 

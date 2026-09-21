@@ -136,19 +136,38 @@ audits, and timeline are kept. A stage that is running must finish (or be paused
 
 **Settings → Topic discovery** turns automatic article discovery on or off, sets how often the
 worker scans (default every 30 minutes), whether discovered articles get a ChatGPT hero image,
-whether they publish on their own, and a daily target (0–12) for each of the ten categories. **Scan now** makes the worker's next poll
-scan immediately; daily targets still apply. **Recent scans** lists the last ten scans with what
-they found, what they created, and any error.
+whether they publish on their own, how far apart automatic articles are spaced (5–240 minutes,
+15 by default), and a daily target (0–12) for each of the ten categories. **Scan now** makes the
+worker's next poll scan immediately; daily targets still apply. **Recent scans** lists the last
+ten scans with what they found, what they created, and any error.
 
 Discovered articles run research, writing, image, and audit unattended on the worker PC and then
 wait on the dashboard under **Needs your decision**, with the news story they came from. Read the
 draft, then publish it, schedule it, or discard it.
 
-**Publish discovered articles automatically** (off by default) changes that last step: an article
+**Publish discovered articles automatically** (on by default) changes that last step: an article
 that passes its audit goes live without an editor, appearing under Scheduled and then Live instead
 of waiting. It can still be withdrawn afterwards. The setting is copied onto each article when it
 is discovered, so turning it off leaves articles already in the pipeline alone, and turning it on
 does not release articles that are already waiting.
+
+An article publishes by itself only when three things hold, and the console says which one stopped
+it when they do not:
+
+| The article                         | What happens                                                    |
+| ----------------------------------- | --------------------------------------------------------------- |
+| has a hero image                    | otherwise held: "Not published automatically: it has no image." |
+| is not a story the site already has | otherwise held: "…the site already has this story."             |
+| fits inside the day's article count | otherwise held: "…the day's article count was used up."         |
+
+The day's count is the sum of the category targets, measured against everything published or
+scheduled for the day the article would appear on. Articles that pass are spaced apart — 15
+minutes by default — so the front page fills through the day instead of all at once. A held
+article waits under **Needs your decision** with the reason on its card and in its decision panel,
+and publishing it yourself is immediate: the spacing applies only to the automatic path.
+
+Because an automatically published article needs a hero image, the database refuses to save
+automatic publishing together with **No image** rather than quietly holding every article.
 
 ### Withdrawing an article
 

@@ -15,7 +15,7 @@ import {
 import { StatusBadge } from "@/components/admin/status-badge";
 import { StepTracker } from "@/components/admin/step-tracker";
 import { getAdminDashboard } from "@/lib/admin/dashboard";
-import { listReadyForReview } from "@/lib/admin/discovery";
+import { listReadyForReview, type ReviewItem } from "@/lib/admin/discovery";
 import { formatCount, formatDateTime, formatRelativeTime } from "@/lib/admin/format";
 import {
   IN_PROGRESS_STATUSES,
@@ -39,6 +39,13 @@ export const dynamic = "force-dynamic";
 
 const QUEUE_PAGE_SIZE = 10;
 const IN_PROGRESS_LIMIT = 6;
+
+/** Why the worker left a finished article for the editor instead of publishing it itself. */
+const HOLD_REASON = {
+  no_image: "Not published automatically: it has no image.",
+  duplicate: "Not published automatically: the site already has this story.",
+  daily_cap: "Not published automatically: the day's article count was used up.",
+} as const satisfies Record<NonNullable<ReviewItem["auto_publish_hold_reason"]>, string>;
 
 const QUEUE_FILTERS = [
   ["all", "All"],
@@ -172,6 +179,11 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
                       ready {formatRelativeTime(item.updated_at, generatedAt)}
                     </span>
                   </div>
+                  {item.auto_publish_hold_reason ? (
+                    <p className="mt-2 text-xs font-medium text-warning">
+                      {HOLD_REASON[item.auto_publish_hold_reason]}
+                    </p>
+                  ) : null}
                   <h3 className="mt-2 text-base font-semibold leading-snug">
                     <Link
                       className="hover:text-accent hover:underline"
