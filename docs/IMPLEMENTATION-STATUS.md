@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Commit and push the Phase 12 release candidate                       |
-| Last updated           | 2026-09-21 08:44, Asia/Singapore                                     |
+| Current task           | Confirm private GitHub Actions for the Phase 12 release candidate and prepare the hosted preview handoff. |
+| Last updated           | 2026-09-21 08:45, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | Phase 11 commit `557a63b` is pushed; Phase 12 documentation/environment work is not yet committed. |
-| Active blockers        | Owner design sign-off (Phase 1) remains pending. Preview/production deployment and Cloudflare changes require the owner's hosted accounts. The private GitHub Actions run for `557a63b` could not be inspected because no authenticated browser or GitHub CLI is available in this environment. |
-| Next action            | Commit and push the Phase 12 release candidate, then confirm GitHub Actions. |
+| Relevant commit        | Phase 12 release-candidate commit `6ff36bc` is pushed to `origin/main`. |
+| Active blockers        | Owner design sign-off (Phase 1) remains pending. Preview/production deployment and Cloudflare changes require the owner's hosted accounts. The private GitHub Actions run for `6ff36bc` cannot be inspected because no authenticated browser or GitHub CLI is available in this environment. |
+| Next action            | Confirm GitHub Actions for `6ff36bc`, then deploy and smoke-test a preview with the owner's hosted accounts. |
 
 ## Status legend
 
@@ -324,6 +324,33 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Phase 12 release candidate pushed
+
+Date/time: 2026-09-21 08:45, Asia/Singapore
+
+Phase/task: Phase 12 — release-candidate publication
+
+Status change: Phase 12 remains `IN_PROGRESS` at 80%. The fully verified local release candidate is
+now available on the tracked remote branch; private hosted CI and deployment gates remain open.
+
+What changed: Committed the Phase 12 environment contracts, operator documentation, direct private
+Storage upload flow, migration, security hardening, and release-QA evidence as `6ff36bc`, then pushed
+the commit to `origin/main`.
+
+Files/migrations affected: No product files changed after the verified release-candidate commit;
+this entry records its publication evidence.
+
+Verification performed: `git push origin main` completed successfully and advanced the remote from
+`557a63b` to `6ff36bc`. The local `main` branch then reported clean and aligned with `origin/main`.
+
+Result: Passed. The Phase 12 release candidate is committed and pushed without altering the clean
+local-QA result recorded below.
+
+Commit/PR: `6ff36bc` (`feat: prepare phase 12 release operations`), pushed to `origin/main`.
+
+Next action: Confirm the private GitHub Actions result for `6ff36bc`, then use the owner-controlled
+Vercel, Supabase, and Cloudflare accounts to deploy and smoke-test a preview.
 
 ### 2026-09-21 — Phase 12 local release QA complete
 
