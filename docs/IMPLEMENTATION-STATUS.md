@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Confirm private GitHub Actions for the Phase 12 release candidate and prepare the hosted preview handoff. |
-| Last updated           | 2026-09-21 08:45, Asia/Singapore                                     |
+| Current task           | Hosted preview handoff: owner design sign-off and preview deployment. |
+| Last updated           | 2026-09-21 11:00, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | Phase 12 release-candidate commit `6ff36bc` is pushed to `origin/main`. |
-| Active blockers        | Owner design sign-off (Phase 1) remains pending. Preview/production deployment and Cloudflare changes require the owner's hosted accounts. The private GitHub Actions run for `6ff36bc` cannot be inspected because no authenticated browser or GitHub CLI is available in this environment. |
-| Next action            | Confirm GitHub Actions for `6ff36bc`, then deploy and smoke-test a preview with the owner's hosted accounts. |
+| Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
+| Active blockers        | Owner design sign-off (Phase 1) remains pending. Preview/production deployment and Cloudflare changes require the owner's hosted accounts. |
+| Next action            | Obtain owner design sign-off, then deploy and smoke-test a preview with the owner's hosted accounts. |
 
 ## Status legend
 
@@ -39,7 +39,7 @@ This is the authoritative live record of implementation progress. Update it imme
 |     9 | Subscription CLI providers                         | `COMPLETE`    |     100% | 2026-09-18 | 335 unit tests, 129 integration tests, 61 signed-out/design and 14 authenticated browser checks pass; live Claude Code draft and live Codex research from the production prompts pass the artifact schemas; signed-out and usage-limited CLIs reach an actionable `NEEDS_HUMAN`. |
 |    10 | Optional API adapters                              | `COMPLETE`    |     100% | 2026-09-18 | OpenAI, Anthropic, and Gemini adapters share the production prompts/schemas; 344 unit, 130 integration, 61 signed-out/design, and 15 authenticated browser checks pass, including a switched API stage through `VERIFIED`. |
 |    11 | Publishing, scheduling, and verification hardening | `COMPLETE`    |     100% | 2026-09-21 | 357 unit, 147 integration (passed twice without a reset), 61 signed-out/design, and 15 authenticated browser checks pass; concurrent publish, slug/alias conflicts, DST-repeated schedule instants, missing public image copies, revalidation retry and logging, clamped verification retries, and the provider isolation boundary are all covered; a live signed revalidation and a real hero-image fetch clear end to end. |
-|    12 | Operations, documentation, and release QA          | `IN_PROGRESS` |      80% | —         | Local release QA is clean: frozen install, environment/generated-contract checks, 364 unit, 147 integration, 61 signed-out/design and 15 authenticated browser checks, build, dependency audit, and tracked-secret scan pass. Hosted preview/production and owner sign-off remain. |
+|    12 | Operations, documentation, and release QA          | `IN_PROGRESS` |      85% | —         | GitHub Actions passes on the release candidate. Local release QA is clean: frozen install, environment/generated-contract checks, 364 unit, 147 integration, 61 signed-out/design and 15 authenticated browser checks, build, dependency audit, and tracked-secret scan pass. Hosted preview/production and owner sign-off remain. |
 
 ## Active phase checklist
 
@@ -53,7 +53,7 @@ This is the authoritative live record of implementation progress. Update it imme
       documented 10 MB limit works on Vercel, while preserving authorization and byte verification.
 - [x] Run the complete clean database, security, accessibility, responsive, failure-recovery, and
       browser release-QA matrix and record screenshots/evidence.
-- [ ] Confirm the private GitHub Actions run for Phase 11 and the Phase 12 release candidate.
+- [x] Confirm the private GitHub Actions run for Phase 11 and the Phase 12 release candidate.
 - [ ] Obtain owner design sign-off, deploy a preview, then production, and configure the exact
       Vercel-provided DNS values in Cloudflare.
 
@@ -324,6 +324,35 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Phase 12 release candidate passes GitHub Actions
+
+Date/time: 2026-09-21 11:00, Asia/Singapore
+
+Phase/task: Phase 12 — confirm private GitHub Actions
+
+Status change: Phase 12 remains `IN_PROGRESS`, progress 80% -> 85%. The CI checklist item is complete.
+
+What changed: Installed GitHub CLI 2.101.0 and signed in as `nobledev89` (SSH protocol), so private
+Actions runs can now be inspected from this environment. No product files changed.
+
+Files/migrations affected: `docs/IMPLEMENTATION-STATUS.md` only.
+
+Verification performed: `gh run list` and `gh run view` on `nobledev89/FTP`. Phase 11 run
+`35546977903` on `557a63b` completed `success`. Run `35548697053` on `6ff36bc` was cancelled after
+46–52s by the workflow's `ci-refs/heads/main` concurrency group when `5ac8322` was pushed. `git diff
+6ff36bc 5ac8322` changes only `docs/IMPLEMENTATION-STATUS.md`, so run `35548731358` on `5ac8322`
+tests the release-candidate code: all three jobs passed — "Lint, typecheck, test, build" (1m14s),
+"Design review (Playwright)" (1m42s, 61 passed, 15 skipped), and "Supabase schema, RLS, and queue"
+(3m40s, including 15 authenticated browser checks). The only annotation is GitHub's notice that
+`ubuntu-latest` migrates to Ubuntu 26 from 2026-10-19.
+
+Result: Passed. The release candidate is confirmed in a clean hosted environment.
+
+Commit/PR: `5ac8322` (CI evidence for `6ff36bc`).
+
+Next action: Owner design sign-off, then a preview deployment and smoke test with the owner's
+Vercel, Supabase, and Cloudflare accounts. Re-check CI after the Ubuntu 26 runner migration.
 
 ### 2026-09-21 — Phase 12 release candidate pushed
 
