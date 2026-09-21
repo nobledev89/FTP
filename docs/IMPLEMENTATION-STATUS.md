@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Provision hosted Supabase and connect the existing Vercel deployment to it. |
-| Last updated           | 2026-09-21 13:00, Asia/Singapore                                     |
+| Current task           | Production is connected end to end; next is an article withdrawal path before the first live article. |
+| Last updated           | 2026-09-21 13:05, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
-| Active blockers        | Hosted Supabase (`vobxocvjsdkcabhbdvvv`, eu-west-1) is migrated and seeded; Auth settings and the first owner are set in the dashboard by the owner. The production Vercel deployment has no Supabase variables yet. |
-| Next action            | Owner configures Auth and bootstraps the first owner, then sets the four Vercel variables and redeploys; then run the production smoke checks. |
+| Active blockers        | None for infrastructure. No withdrawal path exists yet, so any production publication is permanent until one is built. |
+| Next action            | Build and test article withdrawal, then run one manual article to `VERIFIED` on production and schedule the worker (Hermes or Task Scheduler). |
 
 ## Status legend
 
@@ -39,7 +39,7 @@ This is the authoritative live record of implementation progress. Update it imme
 |     9 | Subscription CLI providers                         | `COMPLETE`    |     100% | 2026-09-18 | 335 unit tests, 129 integration tests, 61 signed-out/design and 14 authenticated browser checks pass; live Claude Code draft and live Codex research from the production prompts pass the artifact schemas; signed-out and usage-limited CLIs reach an actionable `NEEDS_HUMAN`. |
 |    10 | Optional API adapters                              | `COMPLETE`    |     100% | 2026-09-18 | OpenAI, Anthropic, and Gemini adapters share the production prompts/schemas; 344 unit, 130 integration, 61 signed-out/design, and 15 authenticated browser checks pass, including a switched API stage through `VERIFIED`. |
 |    11 | Publishing, scheduling, and verification hardening | `COMPLETE`    |     100% | 2026-09-21 | 357 unit, 147 integration (passed twice without a reset), 61 signed-out/design, and 15 authenticated browser checks pass; concurrent publish, slug/alias conflicts, DST-repeated schedule instants, missing public image copies, revalidation retry and logging, clamped verification retries, and the provider isolation boundary are all covered; a live signed revalidation and a real hero-image fetch clear end to end. |
-|    12 | Operations, documentation, and release QA          | `IN_PROGRESS` |      85% | —         | GitHub Actions passes on the release candidate. Local release QA is clean: frozen install, environment/generated-contract checks, 364 unit, 147 integration, 61 signed-out/design and 15 authenticated browser checks, build, dependency audit, and tracked-secret scan pass. Hosted preview/production and owner sign-off remain. |
+|    12 | Operations, documentation, and release QA          | `IN_PROGRESS` |      92% | —         | Production web, hosted Supabase, and the worker are connected and smoke-tested. GitHub Actions passes on the release candidate. Local release QA is clean: frozen install, environment/generated-contract checks, 364 unit, 147 integration, 61 signed-out/design and 15 authenticated browser checks, build, dependency audit, and tracked-secret scan pass. Hosted preview/production and owner sign-off remain. |
 
 ## Active phase checklist
 
@@ -56,7 +56,9 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Confirm the private GitHub Actions run for Phase 11 and the Phase 12 release candidate.
 - [x] Obtain owner design sign-off, deploy production to Vercel, and configure the Vercel-provided
       DNS values in Cloudflare (apex canonical, `www` redirects, valid TLS).
-- [ ] Provision hosted Supabase, set the Vercel variables, and pass the production smoke checks.
+- [x] Provision hosted Supabase, set the Vercel variables, and pass the production smoke checks.
+- [ ] Add an article withdrawal path, run one production article to `VERIFIED`, and schedule the
+      worker.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -325,6 +327,43 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Production connected: web, Supabase, and worker
+
+Date/time: 2026-09-21 13:05, Asia/Singapore
+
+Phase/task: Phase 12 — production configuration and smoke checks
+
+Status change: Phase 12 remains `IN_PROGRESS`, progress 85% -> 92%.
+
+What changed: The owner set Supabase Auth (public sign-up off, 12-character minimum, site URL),
+created and bootstrapped the first owner, and added the four Vercel variables. The worker's
+`local-worker/.env.local` points at the hosted project and the production origin; the owner
+supplied the service-role key and a new shared revalidation secret (auto mode refuses to handle
+those credentials) and redeployed Vercel. Admin copy that referred to development phases was
+replaced (`cb98987`).
+
+Files/migrations affected: `src/app/(admin)/admin/page.tsx`, `prompts/page.tsx`,
+`design-review/page.tsx`; git-ignored `local-worker/.env.local`.
+
+Verification performed: The owner signed in to `https://fintechpulse.co.uk/admin` and reached the
+dashboard. `/`, `/blog`, `/feed.xml`, `/sitemap.xml`, and `/robots.txt` return 200; an unknown slug
+and `/design-review` return 404; signed-out `/admin/*` returns 307 to `/admin/login?next=...`;
+`/admin/login` is `private, no-store`; `robots.txt` disallows `/admin`, `/api`, and
+`/design-review`; public HTML contains no secret-key names or `sb_secret_` values.
+`pnpm env:check:worker` passes. `pnpm worker:once` heartbeated and exited idle on an empty queue;
+`pnpm worker:status` then reports `ok: true`, `home-pc-1` `online`, and both subscription CLIs
+ready (Claude Code 2.1.275, Codex 0.146.0). A signed revalidation for a non-existent slug, sent with
+the worker's `CacheRevalidationClient`, returned 200 on the first attempt, so the shared secret
+matches. `pnpm lint`, `pnpm typecheck`, and `pnpm test` pass (364 tests); one earlier unit run
+reported a single failure that did not reproduce in three further runs.
+
+Result: Passed. Production web, database, and worker are connected.
+
+Commit/PR: `cb98987` plus the commit that adds this entry.
+
+Next action: Build article withdrawal (the `withdrawn` status exists but no function sets it), then
+publish one real article through the manual workflow and schedule the worker.
 
 ### 2026-09-21 — Hosted Supabase migrated and seeded
 
