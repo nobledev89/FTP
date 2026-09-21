@@ -76,7 +76,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         {dashboard.workers.length === 0 ? (
           <Notice tone="warning">
             No worker has ever reported in. Started jobs will sit in their pending status until the
-            local worker runs on the owner&rsquo;s PC (Phase 5).
+            local worker runs on the owner&rsquo;s PC. See docs/LOCAL-WORKER.md.
           </Notice>
         ) : null}
 

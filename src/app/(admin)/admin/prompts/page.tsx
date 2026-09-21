@@ -45,7 +45,7 @@ export default async function PromptsPage({ searchParams }: PromptsPageProps) {
         {keys.length === 0 ? (
           <Panel title="Prompt templates">
             <EmptyState>
-              No prompt template has been stored yet. Phase 6 seeds{" "}
+              No prompt template has been stored yet. The database seed provides{" "}
               <span className="font-mono">editorial-style</span>,{" "}
               <span className="font-mono">research</span>, <span className="font-mono">draft</span>,{" "}
               <span className="font-mono">image-brief</span>,{" "}

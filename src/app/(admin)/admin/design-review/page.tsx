@@ -97,7 +97,7 @@ export default function AdminTokenSheetPage() {
       title="Admin token sheet"
     >
       <p className="mb-4 rounded-panel border border-warning/25 bg-warning-bg px-3 py-2 text-xs text-warning">
-        Design review fixture. Sample data only; authentication arrives in Phase 4.
+        Design review fixture. Sample data only; not connected to the database.
       </p>
 
       <div className="grid gap-4 xl:grid-cols-2">
