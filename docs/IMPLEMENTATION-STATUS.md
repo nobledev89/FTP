@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Production is connected end to end; next is an article withdrawal path before the first live article. |
-| Last updated           | 2026-09-21 13:05, Asia/Singapore                                     |
+| Current task           | Article withdrawal is built and verified locally; its migration awaits the owner's production `db push`. |
+| Last updated           | 2026-09-21 14:00, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
-| Active blockers        | None for infrastructure. No withdrawal path exists yet, so any production publication is permanent until one is built. |
-| Next action            | Build and test article withdrawal, then run one manual article to `VERIFIED` on production and schedule the worker (Hermes or Task Scheduler). |
+| Active blockers        | Production database writes must be run by the owner (auto mode refuses them). |
+| Next action            | Owner runs `supabase db push` for `20260921120000_article_withdrawal.sql`; then push the web change, run one manual article to `VERIFIED` on production, and schedule the worker. |
 
 ## Status legend
 
@@ -57,8 +57,9 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Obtain owner design sign-off, deploy production to Vercel, and configure the Vercel-provided
       DNS values in Cloudflare (apex canonical, `www` redirects, valid TLS).
 - [x] Provision hosted Supabase, set the Vercel variables, and pass the production smoke checks.
-- [ ] Add an article withdrawal path, run one production article to `VERIFIED`, and schedule the
-      worker.
+- [x] Add an article withdrawal path (migration, console action, docs, integration and browser tests).
+- [ ] Apply the withdrawal migration to production, run one production article to `VERIFIED`, and
+      schedule the worker.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -327,6 +328,52 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Article withdrawal
+
+Date/time: 2026-09-21 14:00, Asia/Singapore
+
+Phase/task: Phase 12 — take-down path before the first production article
+
+Status change: Phase 12 remains `IN_PROGRESS`.
+
+What changed: Added `public.admin_withdraw_article(job, expected lock_version, reason)`, the writer
+the Phase 2 schema reserved (`article_status = 'withdrawn'`, `withdrawn_at`, and the `withdraw`
+state context). It requires an active owner/editor on the job's site, the current `lock_version`,
+and a 3–500 character reason; refuses jobs without a `PUBLISHED`/`VERIFIED` article, an article
+already withdrawn, and a live verification lease (`FT003`); marks the article withdrawn; clears
+`next_attempt_at`, attempts, any expired lease, and any action-required state so the worker never
+re-verifies it; and appends `article.withdrawn` with the reason and slug. The job status is
+unchanged. The admin job page shows a **Withdraw article** form (reason plus required confirmation)
+for editors, a `withdrawn` badge, the withdrawal time, and a persistent notice afterwards. The Server
+Action calls `updateTag` for `public:articles` and the slug tag, which every public cache entry
+(including alias resolutions, feed, and sitemap) carries.
+
+Files/migrations affected: `supabase/migrations/20260921120000_article_withdrawal.sql`, generated
+database types (web and worker), `src/lib/admin/actions.ts`, `src/lib/admin/jobs.ts`,
+`src/components/admin/withdraw-article-form.tsx`, `src/app/(admin)/admin/articles/[jobId]/page.tsx`,
+`tests/integration/publishing.test.ts`, `tests/integration/schema.test.ts`,
+`tests/e2e/admin-session.spec.ts`, `docs/ADMIN-CONSOLE.md`, `docs/PUBLICATION.md`.
+
+Verification performed: `supabase db reset --local` applies all 16 migrations and seed; `db:lint`
+is clean; `db:types` regenerated. `pnpm test:integration` passes 151 tests, including four new
+withdrawal tests: a verified article disappears from anonymous reads while its verification record
+and the editor's reason are kept and a second withdrawal is refused; a pending verification is
+cancelled and the job is no longer claimable; a live verification lease is refused, then an expired
+one is cleared; viewers, anonymous callers, stale lock versions, blank reasons, and unpublished jobs
+are refused. `pnpm test:e2e:admin` passes 16 checks, including a new one that publishes a mock
+article through the worker, adds an old-slug alias, withdraws it from the console (an unticked
+confirmation does not submit), and then gets 404 for the article and the alias with the slug absent
+from `/`, `/blog`, `/feed.xml`, and `/sitemap.xml`. `pnpm format:check`, `pnpm lint`,
+`pnpm typecheck`, `pnpm test` (364), `pnpm contracts:sync --check`, and `pnpm test:e2e` (61) pass.
+`supabase db push --dry-run` against production lists only the new migration.
+
+Result: Passed locally. Production needs the migration before the web change is pushed.
+
+Commit/PR: Recorded in the commit that adds this entry (not yet pushed).
+
+Next action: Owner runs `pnpm exec supabase db push`; then push `main`, confirm CI, and withdraw-test
+nothing on production until the first real article exists.
 
 ### 2026-09-21 — Production connected: web, Supabase, and worker
 

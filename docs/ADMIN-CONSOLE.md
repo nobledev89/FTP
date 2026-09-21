@@ -40,15 +40,16 @@ bookmarked, and no screen loads an entire history into the browser.
 
 The controls offered depend on the job's status, and mirror what `admin_transition_job` will accept:
 
-| Status               | Controls                                        |
-| -------------------- | ----------------------------------------------- |
-| `IDEA`               | Start research, pause, mark needs human         |
-| Any other pausable   | Pause, mark needs human                         |
-| `APPROVED`           | Schedule publication, pause, mark needs human   |
-| `PAUSED`             | Resume                                          |
-| `FAILED`             | Retry the failed stage                          |
-| `NEEDS_HUMAN`        | Resolve to an explicit destination, with a note |
-| Running or published | None: the worker owns the outcome               |
+| Status                 | Controls                                        |
+| ---------------------- | ----------------------------------------------- |
+| `IDEA`                 | Start research, pause, mark needs human         |
+| Any other pausable     | Pause, mark needs human                         |
+| `APPROVED`             | Schedule publication, pause, mark needs human   |
+| `PAUSED`               | Resume                                          |
+| `FAILED`               | Retry the failed stage                          |
+| `NEEDS_HUMAN`          | Resolve to an explicit destination, with a note |
+| Running                | None: the worker owns the outcome               |
+| `PUBLISHED`/`VERIFIED` | Withdraw the article, with a reason             |
 
 Approval is a resolution: an escalated job is resolved to `APPROVED`, which the database allows only
 after an audit, and only when the latest valid draft carries the latest audit.
@@ -56,6 +57,20 @@ after an audit, and only when the latest valid draft carries the latest audit.
 Every action carries the `lock_version` the page was rendered with. If someone else acted in between,
 the action is refused with "This job changed since the page was loaded" rather than overwriting their
 work. Escalating and resolving both require a note, which is recorded on the timeline.
+
+### Withdrawing an article
+
+An owner or editor can take a live article down from the **Published article** panel. It needs a
+reason (3–500 characters, recorded on the timeline as `article.withdrawn`) and a confirmation tick.
+`admin_withdraw_article` marks the snapshot `withdrawn`, cancels a pending or exhausted verification
+so the worker never re-checks it, and refuses while a verification lease is live ("try again in a
+minute"). The action then expires the public cache tags, so the article page, its earlier slugs, the
+home page, archive, feed, and sitemap drop it on the next request.
+
+Withdrawal is final for that job: the job keeps its `PUBLISHED`/`VERIFIED` history, the slug stays
+reserved, and there is no republish control. To correct and republish, create a new job with a new
+slug. The published hero copy in the public `article-public` bucket is not deleted; nothing links to
+it any more, but its direct URL still resolves.
 
 ## What this application cannot do
 

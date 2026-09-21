@@ -1,10 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { authorizeAdminAction } from "@/lib/auth/dal";
+import { PUBLIC_ARTICLES_TAG, publicArticleTag } from "@/lib/publication/repository";
 import { planAdminTransition, type AdminAction } from "@/lib/state-machine/admin-rules";
 import { WorkflowError, toWorkflowError } from "@/lib/state-machine/errors";
 import { createAdminWorkflowService } from "@/lib/state-machine/supabase";
@@ -373,6 +374,79 @@ export async function jobTransitionAction(
     revalidatePath("/admin");
     revalidatePath(`/admin/articles/${command.jobId}`);
     return { ok: true, message: ACTION_LABELS[command.action] };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Withdrawal
+// ---------------------------------------------------------------------------
+
+const withdrawFormSchema = z.object({
+  jobId: uuidSchema,
+  expectedLockVersion: z.coerce.number().int().nonnegative(),
+  reason: z
+    .string()
+    .transform((value) => value.trim())
+    .pipe(
+      z
+        .string()
+        .min(3, "must be at least 3 characters")
+        .max(500, "must be 500 characters or fewer"),
+    ),
+});
+
+/**
+ * Takes a published article off the site. `admin_withdraw_article` re-authorizes the editor,
+ * checks `lock_version`, marks the article withdrawn, cancels any pending verification, and
+ * records the reason on the timeline; RLS then hides the article and its old slugs from public
+ * reads. Every public cache entry carries the shared articles tag, so expiring it here removes the
+ * page, the archive listing, the feed, the sitemap entry, and any aliased slug on the next request.
+ */
+export async function withdrawArticleAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const parsed = withdrawFormSchema.safeParse({
+      jobId: formData.get("jobId"),
+      expectedLockVersion: formData.get("expectedLockVersion"),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+
+    const client = await createSupabaseServerClient();
+    const { data, error } = await client.rpc("admin_withdraw_article", {
+      p_job_id: parsed.data.jobId,
+      p_expected_lock_version: parsed.data.expectedLockVersion,
+      p_reason: parsed.data.reason,
+    });
+    if (error) {
+      const workflowError = toWorkflowError(error);
+      if (workflowError.code === "LEASE_LOST") {
+        return {
+          ok: false,
+          error: "The worker is verifying this article right now. Try again in a minute.",
+        };
+      }
+      if (workflowError.code === "INVALID_TRANSITION") {
+        return {
+          ok: false,
+          error: "This article is not live, or it was already withdrawn. Reload the job.",
+        };
+      }
+      throw error;
+    }
+    const withdrawn = data[0];
+    if (!withdrawn) throw new WorkflowError("NOT_FOUND", "That article no longer exists.");
+
+    updateTag(PUBLIC_ARTICLES_TAG);
+    updateTag(publicArticleTag(withdrawn.slug));
+    revalidatePath("/admin");
+    revalidatePath(`/admin/articles/${parsed.data.jobId}`);
+    return { ok: true, message: `Withdrawn. /blog/${withdrawn.slug} no longer shows the article.` };
   } catch (error) {
     return { ok: false, error: describe(error) };
   }

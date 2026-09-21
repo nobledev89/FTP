@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { adminUser, closeDb, db, resetWorkflowData, serviceClient } from "./helpers/clients";
+import {
+  adminUser,
+  anonClient,
+  closeDb,
+  db,
+  resetWorkflowData,
+  serviceClient,
+} from "./helpers/clients";
 import type { TestUser } from "./helpers/clients";
 import type { Claim, Stage } from "./helpers/workflow";
 import {
@@ -10,6 +17,7 @@ import {
   createJob,
   events,
   expectCode,
+  expireLease,
   jobRow,
   runToApproved,
   succeed,
@@ -727,5 +735,137 @@ describe("publication boundary isolation", () => {
       ).error,
       "FT001",
     );
+  });
+});
+
+describe("article withdrawal", () => {
+  async function verifiedArticle(slug: string) {
+    const { jobId } = await runToApproved(editor, { autoPublish: true, slug });
+    await publishNow(jobId);
+    const verifying = await claimStage(jobId, "verify");
+    await unwrap(
+      serviceClient().rpc("record_verification", {
+        p_job_id: jobId,
+        p_worker_id: WORKER_A,
+        p_lease_token: verifying.lease_token,
+        p_checks: checks(),
+      }),
+    );
+    return jobId;
+  }
+
+  async function withdraw(jobId: string, reason = "Factual error in the lead", admin = editor) {
+    const job = await jobRow(jobId);
+    return admin.client.rpc("admin_withdraw_article", {
+      p_job_id: jobId,
+      p_expected_lock_version: job.lock_version,
+      p_reason: reason,
+    });
+  }
+
+  async function publicRows(slug: string) {
+    return unwrap(anonClient().from("articles").select("id").eq("slug", slug));
+  }
+
+  it("takes a verified article out of every public read and records who and why", async () => {
+    const jobId = await verifiedArticle("withdrawn-verified");
+    expect(await publicRows("withdrawn-verified")).toHaveLength(1);
+
+    const [result] = await unwrap(withdraw(jobId));
+    expect(result!.slug).toBe("withdrawn-verified");
+
+    expect(await publicRows("withdrawn-verified")).toHaveLength(0);
+    const job = await jobRow(jobId);
+    expect(job.status).toBe("VERIFIED");
+    expect(result!.lock_version).toBe(job.lock_version);
+
+    const { rows } = await db().query(
+      "select status, withdrawn_at, verified_at from public.articles where id = $1",
+      [job.article_id],
+    );
+    expect(rows[0]).toMatchObject({ status: "withdrawn" });
+    expect(rows[0].withdrawn_at).not.toBeNull();
+    // The verification record is history and survives the withdrawal.
+    expect(rows[0].verified_at).not.toBeNull();
+
+    const history = await db().query(
+      "select event_type, actor_type, actor_id, note, metadata from public.job_events where job_id = $1 and event_type = 'article.withdrawn'",
+      [jobId],
+    );
+    expect(history.rows).toEqual([
+      expect.objectContaining({
+        actor_type: "admin",
+        actor_id: editor.id,
+        note: "Factual error in the lead",
+        metadata: expect.objectContaining({ slug: "withdrawn-verified" }),
+      }),
+    ]);
+
+    // The slug stays reserved, and a second withdrawal is refused.
+    expectCode((await withdraw(jobId)).error, "FT001");
+  });
+
+  it("cancels a pending verification so the worker never claims the withdrawn article", async () => {
+    const { jobId } = await runToApproved(editor, { autoPublish: true, slug: "withdrawn-pending" });
+    await publishNow(jobId);
+    expect((await jobRow(jobId)).next_attempt_at).not.toBeNull();
+
+    await unwrap(withdraw(jobId));
+
+    const job = await jobRow(jobId);
+    expect(job.status).toBe("PUBLISHED");
+    expect(job.next_attempt_at).toBeNull();
+    expect(job.action_required_kind).toBeNull();
+    expect(await claim(WORKER_A, ["verify"])).toBeNull();
+    expect(await publicRows("withdrawn-pending")).toHaveLength(0);
+  });
+
+  it("waits for a verification in flight, then clears its expired lease", async () => {
+    const { jobId } = await runToApproved(editor, { autoPublish: true, slug: "withdrawn-leased" });
+    await publishNow(jobId);
+    await claimStage(jobId, "verify");
+
+    expectCode((await withdraw(jobId)).error, "FT003");
+    expect(await publicRows("withdrawn-leased")).toHaveLength(1);
+
+    await expireLease(jobId);
+    await unwrap(withdraw(jobId));
+    const job = await jobRow(jobId);
+    expect(job.lease_token).toBeNull();
+    expect(await claim(WORKER_A, ["verify"])).toBeNull();
+  });
+
+  it("refuses viewers, anonymous callers, stale pages, missing reasons, and unpublished jobs", async () => {
+    const jobId = await verifiedArticle("withdrawal-guards");
+    const viewer = await adminUser("viewer");
+    const job = await jobRow(jobId);
+
+    expectCode((await withdraw(jobId, "Viewer attempt", viewer)).error, "42501");
+    expectCode(
+      (
+        await anonClient().rpc("admin_withdraw_article", {
+          p_job_id: jobId,
+          p_expected_lock_version: job.lock_version,
+          p_reason: "Anonymous attempt",
+        })
+      ).error,
+      "42501",
+    );
+    expectCode(
+      (
+        await editor.client.rpc("admin_withdraw_article", {
+          p_job_id: jobId,
+          p_expected_lock_version: job.lock_version - 1,
+          p_reason: "Stale page",
+        })
+      ).error,
+      "FT002",
+    );
+    expectCode((await withdraw(jobId, "  ")).error, "22023");
+
+    const unpublished = await createJob(editor);
+    expectCode((await withdraw(unpublished)).error, "FT001");
+
+    expect(await publicRows("withdrawal-guards")).toHaveLength(1);
   });
 });

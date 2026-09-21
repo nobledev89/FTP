@@ -1557,6 +1557,18 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_withdraw_article: {
+        Args: {
+          p_expected_lock_version: number
+          p_job_id: string
+          p_reason: string
+        }
+        Returns: {
+          lock_version: number
+          slug: string
+          withdrawn_at: string
+        }[]
+      }
       claim_next_job: {
         Args: {
           p_lease_seconds?: number

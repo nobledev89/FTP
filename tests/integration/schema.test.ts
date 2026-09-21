@@ -65,6 +65,7 @@ describe("migrations", () => {
       { role: "authenticated", name: "admin_update_provider_setting" },
       { role: "authenticated", name: "admin_update_site_identity" },
       { role: "authenticated", name: "admin_update_site_settings" },
+      { role: "authenticated", name: "admin_withdraw_article" },
       { role: "authenticated", name: "create_article_job" },
     ]);
   });

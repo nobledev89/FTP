@@ -502,6 +502,95 @@ test.describe("authenticated admin console", () => {
     expect(logs.data?.every((entry) => entry.outcome === "succeeded")).toBe(true);
   });
 
+  test("withdraws a live article from the page, listings, feed, sitemap, and old slugs", async ({
+    page,
+    request,
+  }) => {
+    const withdrawnTopic = `Withdrawn buy now pay later notice ${randomUUID().slice(0, 8)}`;
+    const editor = createClient<Database>(supabaseUrl as string, publishableKey as string, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    expect(
+      (await editor.auth.signInWithPassword({ email: ownerEmail, password: PASSWORD })).error,
+    ).toBeNull();
+    const job = await editor.rpc("create_article_job", {
+      p_topic: withdrawnTopic,
+      p_keywords: ["payments", "uk"],
+      p_image_count: 0,
+      p_auto_publish: true,
+      p_research_mode: "mock",
+      p_writing_mode: "mock",
+      p_images_mode: "mock",
+      p_audit_mode: "mock",
+    });
+    if (job.error || !job.data) throw job.error ?? new Error("job creation failed");
+    const withdrawnJobId = job.data;
+    const started = await editor.rpc("admin_transition_job", {
+      p_job_id: withdrawnJobId,
+      p_action: "start",
+      p_expected_lock_version: 0,
+    });
+    if (started.error) throw started.error;
+
+    await runWorkerUntil(
+      workerRunner("e2e-withdrawal-worker"),
+      withdrawnJobId,
+      (state) => state.status === "VERIFIED",
+    );
+    const published = await service
+      .from("article_jobs")
+      .select("article_id")
+      .eq("id", withdrawnJobId)
+      .single();
+    const article = await service
+      .from("articles")
+      .select("id, site_id, slug")
+      .eq("id", published.data!.article_id!)
+      .single();
+    if (article.error || !article.data) throw article.error ?? new Error("article missing");
+    const slug = article.data.slug;
+    const alias = `earlier-${slug}`;
+    const insertedAlias = await service.from("article_slug_aliases").insert({
+      article_id: article.data.id,
+      site_id: article.data.site_id,
+      slug: alias,
+    });
+    if (insertedAlias.error) throw insertedAlias.error;
+
+    expect((await request.get(`/blog/${slug}`)).status()).toBe(200);
+    expect((await request.get(`/blog/${alias}`, { maxRedirects: 0 })).status()).toBe(308);
+    expect(await (await request.get("/feed.xml")).text()).toContain(`/blog/${slug}`);
+
+    await signIn(page, ownerEmail, /\/admin$/);
+    await page.goto(`/admin/articles/${withdrawnJobId}`);
+    const withdraw = page.getByRole("button", { name: "Withdraw article" });
+    await expect(withdraw).toBeVisible();
+
+    // The confirmation checkbox is required, so an unticked form does not submit.
+    await page.getByLabel("Reason for withdrawal").fill("Superseded by a corrected explainer.");
+    await withdraw.click();
+    await expect(page.getByText("and its earlier addresses now return 404")).toHaveCount(0);
+    await expect(withdraw).toBeVisible();
+
+    await page.getByLabel("I understand this takes the article off the public site.").check();
+    await withdraw.click();
+    await expect(page.getByText("and its earlier addresses now return 404")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Withdraw article" })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText("withdrawn").first()).toBeVisible();
+    await expect(page.getByText("article.withdrawn")).toBeVisible();
+    await expect(page.getByText("Superseded by a corrected explainer.")).toBeVisible();
+
+    const gone = await page.goto(`/blog/${slug}`);
+    expect(gone?.status()).toBe(404);
+    expect(await page.textContent("body")).not.toContain(withdrawnTopic);
+    expect((await request.get(`/blog/${alias}`, { maxRedirects: 0 })).status()).toBe(404);
+    for (const surface of ["/", "/blog", "/feed.xml", "/sitemap.xml"]) {
+      const body = await (await request.get(surface)).text();
+      expect(body, `${surface} still lists the withdrawn article`).not.toContain(`/blog/${slug}`);
+    }
+  });
+
   test("changes a provider default to a manual mode for new jobs", async ({ page }) => {
     await signIn(page, ownerEmail, /\/admin$/);
     await page.goto("/admin/providers");

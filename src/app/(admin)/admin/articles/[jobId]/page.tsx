@@ -9,6 +9,7 @@ import { JobStatusBadge } from "@/components/admin/job-status-badge";
 import { ManualActionPanel } from "@/components/admin/manual-action-panel";
 import { DefinitionList, EmptyState, JsonBlock, Notice, Panel } from "@/components/admin/panel";
 import { StatusBadge } from "@/components/admin/status-badge";
+import { WithdrawArticleForm } from "@/components/admin/withdraw-article-form";
 import { formatCost, formatDateTime, formatElapsed, formatRelativeTime } from "@/lib/admin/format";
 import { availableControls, resolutionDestinations } from "@/lib/admin/job-controls";
 import { getDraftBody, getJobDetail, listJobEvents, listSources } from "@/lib/admin/jobs";
@@ -103,7 +104,14 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
 
   return (
     <AdminShell
-      actions={<JobStatusBadge status={job.status} />}
+      actions={
+        <div className="flex items-center gap-2">
+          <JobStatusBadge status={job.status} />
+          {detail.article?.status === "withdrawn" ? (
+            <StatusBadge tone={articleStatusTone("withdrawn")}>withdrawn</StatusBadge>
+          ) : null}
+        </div>
+      }
       currentHref="/admin"
       session={session}
       title={job.topic}
@@ -287,8 +295,28 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
                 ],
                 ["Published", formatDateTime(detail.article.published_at)],
                 ["Verified", formatDateTime(detail.article.verified_at)],
+                ...(detail.article.withdrawn_at
+                  ? ([["Withdrawn", formatDateTime(detail.article.withdrawn_at)]] as const)
+                  : []),
               ]}
             />
+            {detail.article.status === "withdrawn" ? (
+              <div className="mt-4">
+                <Notice tone="info">
+                  Withdrawn {formatDateTime(detail.article.withdrawn_at)}.{" "}
+                  <span className="font-mono">/blog/{detail.article.slug}</span> and its earlier
+                  addresses now return 404. The reason is recorded on the timeline.
+                </Notice>
+              </div>
+            ) : session.canEdit ? (
+              <div className="mt-4 border-t border-border pt-4">
+                <WithdrawArticleForm
+                  jobId={job.id}
+                  lockVersion={job.lock_version}
+                  slug={detail.article.slug}
+                />
+              </div>
+            ) : null}
           </Panel>
         ) : null}
 

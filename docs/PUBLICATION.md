@@ -52,6 +52,10 @@ uses constant-time signature comparison, rejects reused nonces in the process wi
 bounded request rate, validates the slug, and expires only the global list tag and that slug's tag.
 It never accepts arbitrary cache tags or paths. Web and worker must receive the same secret.
 
+Withdrawal does not use this route. The console's Server Action calls `updateTag` for
+`public:articles` and the article's slug tag after `admin_withdraw_article` commits, so the next
+request reads the database, where RLS no longer returns the article or its aliases.
+
 Revalidation is deliberately outside the publication transaction. If the web process is down, the
 article remains published and the verifier records the failed live checks for bounded retry rather
 than attempting to undo the database snapshot or public Storage copy.

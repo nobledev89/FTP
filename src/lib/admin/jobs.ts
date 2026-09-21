@@ -257,6 +257,7 @@ const articleSchema = z
     published_at: timestampSchema,
     verified_at: nullableTimestampSchema,
     content_updated_at: nullableTimestampSchema,
+    withdrawn_at: nullableTimestampSchema,
   })
   .strict();
 
@@ -342,7 +343,7 @@ export async function getJobDetail(jobId: string): Promise<JobDetail | null> {
       ? client
           .from("articles")
           .select(
-            "id, slug, title, excerpt, meta_title, meta_description, canonical_url, status, published_at, verified_at, content_updated_at",
+            "id, slug, title, excerpt, meta_title, meta_description, canonical_url, status, published_at, verified_at, content_updated_at, withdrawn_at",
           )
           .eq("id", job.article_id)
           .maybeSingle()
