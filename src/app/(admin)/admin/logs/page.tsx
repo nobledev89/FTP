@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Cell, FilterTabs, Pager, Table, TableHead, TableRow } from "@/components/admin/data-table";
+import { LiveRefresh } from "@/components/admin/live-refresh";
 import { EmptyState, Notice, Panel } from "@/components/admin/panel";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { formatDateTime, formatElapsed } from "@/lib/admin/format";
@@ -40,6 +41,7 @@ type LogsPageProps = {
 
 export default async function LogsPage({ searchParams }: LogsPageProps) {
   const session = await requireAdminSession();
+  const serverUpdatedAt = new Date().toISOString();
   const params = await searchParams;
   const filters = parseLogFilters(params);
   const page = parsePage(params.page);
@@ -66,7 +68,12 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
   );
 
   return (
-    <AdminShell currentHref="/admin/logs" session={session} title="Logs">
+    <AdminShell
+      actions={<LiveRefresh serverUpdatedAt={serverUpdatedAt} />}
+      currentHref="/admin/logs"
+      session={session}
+      title="Logs"
+    >
       <div className="grid gap-4">
         <Notice tone="info">
           Messages that originate on the worker PC are redacted before they are shown: credentials,

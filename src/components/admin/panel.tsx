@@ -39,16 +39,32 @@ type StatTileProps = {
   label: string;
   value: string;
   hint?: string;
-  href?: string;
+  tone?: "neutral" | "info" | "warning" | "danger" | "success";
 };
 
+const STAT_TONE_CLASSES = {
+  neutral: "bg-neutral",
+  info: "bg-info",
+  warning: "bg-warning",
+  danger: "bg-danger",
+  success: "bg-success",
+} as const satisfies Record<NonNullable<StatTileProps["tone"]>, string>;
+
 /** A single number with its label. The number is never the only thing that carries the meaning. */
-export function StatTile({ label, value, hint }: StatTileProps) {
+export function StatTile({ label, value, hint, tone = "neutral" }: StatTileProps) {
   return (
-    <div className="rounded-panel border border-border bg-panel p-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-text-subtle">{label}</div>
-      <div className="mt-1 font-mono text-xl font-semibold tabular-nums">{value}</div>
-      {hint ? <div className="mt-0.5 text-xs text-text-muted">{hint}</div> : null}
+    <div className="relative overflow-hidden rounded-panel border border-border bg-panel p-3 pl-4">
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-1 ${STAT_TONE_CLASSES[tone]}`}
+      />
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+        {label}
+      </div>
+      <div className="mt-1.5 font-mono text-2xl font-semibold leading-none tabular-nums">
+        {value}
+      </div>
+      {hint ? <div className="mt-1 text-xs text-text-muted">{hint}</div> : null}
     </div>
   );
 }

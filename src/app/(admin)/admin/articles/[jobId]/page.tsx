@@ -6,6 +6,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { Cell, Pager, Table, TableHead, TableRow } from "@/components/admin/data-table";
 import { JobControls } from "@/components/admin/job-controls";
 import { JobStatusBadge } from "@/components/admin/job-status-badge";
+import { LiveRefresh } from "@/components/admin/live-refresh";
 import { ManualActionPanel } from "@/components/admin/manual-action-panel";
 import { DefinitionList, EmptyState, JsonBlock, Notice, Panel } from "@/components/admin/panel";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -51,6 +52,7 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 
 export default async function ArticleDetailPage({ params, searchParams }: ArticleDetailPageProps) {
   const session = await requireAdminSession();
+  const serverUpdatedAt = new Date().toISOString();
   const { jobId } = await params;
   const query = await searchParams;
 
@@ -117,12 +119,15 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
       title={job.topic}
     >
       <div className="grid gap-4">
-        <p className="text-xs text-text-subtle">
-          <Link className="text-accent hover:underline" href="/admin">
-            Dashboard
-          </Link>{" "}
-          / <span className="font-mono">{shortId(job.id)}</span>
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-text-subtle">
+            <Link className="text-accent hover:underline" href="/admin">
+              Dashboard
+            </Link>{" "}
+            / <span className="font-mono">{shortId(job.id)}</span>
+          </p>
+          <LiveRefresh serverUpdatedAt={serverUpdatedAt} />
+        </div>
 
         {job.action_required_kind ? (
           <Notice tone="warning">
@@ -668,7 +673,7 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
         </Panel>
 
         <Panel
-          description="Append-only history. Every status change is written by the database, not by the console."
+          description="Append-only history. New events appear automatically while this page is open."
           flush
           title="Timeline"
         >
