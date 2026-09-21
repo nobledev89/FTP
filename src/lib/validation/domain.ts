@@ -49,6 +49,17 @@ export const errorClassSchema = z.enum([
   "unknown",
 ]);
 
+/** The news story a discovered job was created from (`article_jobs.discovery_source`). */
+export const discoverySourceSchema = z
+  .object({
+    url: z.string().url(),
+    headline: z.string(),
+    publisher: z.string().nullable().optional(),
+    published_at: z.string().nullable().optional(),
+    run_id: z.number().int().optional(),
+  })
+  .passthrough();
+
 export const articleJobSchema = z
   .object({
     id: uuidSchema,
@@ -94,6 +105,9 @@ export const articleJobSchema = z
     created_by: uuidSchema.nullable(),
     created_at: timestampSchema,
     updated_at: timestampSchema,
+    origin: z.enum(["editor", "discovery"]),
+    topic_category_id: uuidSchema.nullable(),
+    discovery_source: discoverySourceSchema.nullable(),
   })
   .strict()
   .superRefine((job, context) => {

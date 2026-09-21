@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 
 import { AdminShell } from "@/components/admin/admin-shell";
-import { DefinitionList, Notice, Panel } from "@/components/admin/panel";
+import { Cell, Table, TableHead, TableRow } from "@/components/admin/data-table";
+import { DiscoverySettingsForm } from "@/components/admin/discovery-settings-form";
+import { DefinitionList, EmptyState, Notice, Panel } from "@/components/admin/panel";
+import { StatusBadge } from "@/components/admin/status-badge";
 import { SiteIdentityForm, SiteSettingsForm } from "@/components/admin/settings-forms";
 import { getPublicationConfiguration } from "@/lib/admin/configuration";
-import { formatDateTime } from "@/lib/admin/format";
+import { getDiscoveryOverview } from "@/lib/admin/discovery";
+import { formatDateTime, formatElapsed } from "@/lib/admin/format";
 import { requireAdminSession } from "@/lib/auth/dal";
 
 export const metadata: Metadata = {
@@ -16,7 +20,10 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const session = await requireAdminSession();
-  const configuration = await getPublicationConfiguration(session.siteId);
+  const [configuration, discovery] = await Promise.all([
+    getPublicationConfiguration(session.siteId),
+    getDiscoveryOverview(session.siteId),
+  ]);
 
   if (!configuration) {
     return (
@@ -82,6 +89,76 @@ export default async function SettingsPage() {
         >
           <SiteIdentityForm isOwner={session.isOwner} site={site} />
         </Panel>
+
+        {discovery ? (
+          <Panel
+            description="Finds real, recent news for each category and writes the articles on the worker PC. Every article waits for you to schedule or discard it."
+            title="Topic discovery"
+          >
+            <DiscoverySettingsForm
+              canEdit={session.canEdit}
+              categories={discovery.categories.map((category) => ({
+                id: category.id,
+                name: category.name,
+                guidance: category.guidance,
+                dailyTarget: category.daily_target,
+                createdToday: category.createdToday,
+              }))}
+              enabled={discovery.settings.discovery_enabled}
+              imageCount={discovery.settings.discovery_image_count}
+              intervalMinutes={discovery.settings.discovery_interval_minutes}
+            />
+          </Panel>
+        ) : null}
+
+        {discovery ? (
+          <Panel
+            description={`Last scan started ${formatDateTime(discovery.settings.discovery_last_started_at)}. A scan only runs when a category still needs an article today.`}
+            flush
+            title="Recent scans"
+          >
+            {discovery.runs.length === 0 ? (
+              <div className="p-4">
+                <EmptyState>No scan has run yet.</EmptyState>
+              </div>
+            ) : (
+              <Table minWidth="40rem">
+                <TableHead
+                  columns={["Started", "Status", "Categories", "Found", "Created", "Took", "Note"]}
+                />
+                <tbody>
+                  {discovery.runs.map((run) => (
+                    <TableRow key={run.id}>
+                      <Cell nowrap variant="mono">
+                        {formatDateTime(run.started_at)}
+                      </Cell>
+                      <Cell>
+                        <StatusBadge
+                          tone={
+                            run.status === "succeeded"
+                              ? "success"
+                              : run.status === "failed"
+                                ? "danger"
+                                : "info"
+                          }
+                        >
+                          {run.status}
+                        </StatusBadge>
+                      </Cell>
+                      <Cell variant="muted">{run.categories.join(", ")}</Cell>
+                      <Cell variant="mono">{run.candidates ?? "—"}</Cell>
+                      <Cell variant="mono">{run.created_job_ids.length}</Cell>
+                      <Cell nowrap variant="mono">
+                        {formatElapsed(run.started_at, run.finished_at)}
+                      </Cell>
+                      <Cell variant="muted">{run.error ?? "—"}</Cell>
+                    </TableRow>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </Panel>
+        ) : null}
 
         <Panel
           description="Editorial defaults, SEO fallbacks, and worker health thresholds."

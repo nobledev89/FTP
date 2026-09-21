@@ -591,6 +591,92 @@ test.describe("authenticated admin console", () => {
     }
   });
 
+  test("lists an approved article for review and discards it", async ({ page }) => {
+    const reviewTopic = `Review queue check ${randomUUID().slice(0, 8)}`;
+    const editor = createClient<Database>(supabaseUrl as string, publishableKey as string, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    expect(
+      (await editor.auth.signInWithPassword({ email: ownerEmail, password: PASSWORD })).error,
+    ).toBeNull();
+    const job = await editor.rpc("create_article_job", {
+      p_topic: reviewTopic,
+      p_keywords: ["payments", "uk"],
+      p_image_count: 0,
+      p_auto_publish: false,
+      p_research_mode: "mock",
+      p_writing_mode: "mock",
+      p_images_mode: "mock",
+      p_audit_mode: "mock",
+    });
+    if (job.error || !job.data) throw job.error ?? new Error("job creation failed");
+    const reviewJobId = job.data;
+    const started = await editor.rpc("admin_transition_job", {
+      p_job_id: reviewJobId,
+      p_action: "start",
+      p_expected_lock_version: 0,
+    });
+    if (started.error) throw started.error;
+    await runWorkerUntil(
+      workerRunner("e2e-review-worker"),
+      reviewJobId,
+      (state) => state.status === "APPROVED",
+    );
+
+    await signIn(page, ownerEmail, /\/admin$/);
+    const review = page.getByRole("heading", { name: /Ready for review/ });
+    await expect(review).toBeVisible();
+    // It is also listed under Upcoming, which shows every approved job; Ready for review comes first.
+    await page.getByRole("link", { name: reviewTopic }).first().click();
+    await expect(page).toHaveURL(new RegExp(`/admin/articles/${reviewJobId}$`));
+
+    await page.getByLabel("Reason for discarding").fill("Not strong enough for publication.");
+    await page.getByLabel("I understand a discarded article cannot be restored.").check();
+    await page.getByRole("button", { name: "Discard article" }).click();
+    await expect(page.getByText("DISCARDED").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Discard article" })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText("job.discarded")).toBeVisible();
+
+    await page.goto("/admin");
+    await expect(page.getByRole("link", { name: reviewTopic })).toHaveCount(0);
+  });
+
+  test("configures topic discovery per category and requests a scan", async ({ page }) => {
+    await signIn(page, ownerEmail, /\/admin$/);
+    await page.goto("/admin/settings");
+    await expect(page.getByRole("heading", { name: "Topic discovery" })).toBeVisible();
+    const targets = page.getByRole("spinbutton", { name: /articles per day$/ });
+    await expect(targets).toHaveCount(10);
+
+    await page.getByLabel("Find and write articles automatically").check();
+    await page.getByLabel("Payments articles per day").fill("2");
+    await page.getByLabel("Open Banking articles per day").fill("1");
+    await page.getByRole("button", { name: "Save discovery settings" }).click();
+    await expect(page.getByText("Discovery is on: up to 3 articles a day.")).toBeVisible();
+
+    const saved = await service
+      .from("topic_categories")
+      .select("slug, daily_target")
+      .in("slug", ["payments", "open-banking"])
+      .order("slug");
+    expect(saved.data).toEqual([
+      { slug: "open-banking", daily_target: 1 },
+      { slug: "payments", daily_target: 2 },
+    ]);
+
+    await page.getByRole("button", { name: "Scan now" }).click();
+    await expect(page.getByText("Scan requested.", { exact: false })).toBeVisible();
+
+    // Leave discovery off for the rest of the local suite.
+    await page.reload();
+    await page.getByLabel("Find and write articles automatically").uncheck();
+    await page.getByLabel("Payments articles per day").fill("0");
+    await page.getByLabel("Open Banking articles per day").fill("0");
+    await page.getByRole("button", { name: "Save discovery settings" }).click();
+    await expect(page.getByText("Discovery settings saved. Discovery is off.")).toBeVisible();
+  });
+
   test("changes a provider default to a manual mode for new jobs", async ({ page }) => {
     await signIn(page, ownerEmail, /\/admin$/);
     await page.goto("/admin/providers");

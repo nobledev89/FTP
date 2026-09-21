@@ -62,10 +62,13 @@ describe("migrations", () => {
       { role: "authenticated", name: "admin_discard_job" },
       { role: "authenticated", name: "admin_import_manual_image" },
       { role: "authenticated", name: "admin_import_manual_result" },
+      { role: "authenticated", name: "admin_request_discovery_scan" },
       { role: "authenticated", name: "admin_transition_job" },
+      { role: "authenticated", name: "admin_update_discovery_settings" },
       { role: "authenticated", name: "admin_update_provider_setting" },
       { role: "authenticated", name: "admin_update_site_identity" },
       { role: "authenticated", name: "admin_update_site_settings" },
+      { role: "authenticated", name: "admin_update_topic_category" },
       { role: "authenticated", name: "admin_withdraw_article" },
       { role: "authenticated", name: "create_article_job" },
     ]);
@@ -73,6 +76,9 @@ describe("migrations", () => {
 
   it("reserves worker functions for the service role", async () => {
     const workerFunctions = [
+      "worker_begin_topic_discovery",
+      "worker_create_discovered_job",
+      "worker_finish_topic_discovery",
       "claim_next_job",
       "renew_lease",
       "complete_stage",

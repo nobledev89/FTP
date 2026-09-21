@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Article withdrawal is built and verified locally; its migration awaits the owner's production `db push`. |
-| Last updated           | 2026-09-21 14:00, Asia/Singapore                                     |
+| Current task           | Topic discovery, ChatGPT images, and discard are built and verified locally; their migrations await the owner's production `db push`. |
+| Last updated           | 2026-09-21 16:00, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
 | Active blockers        | Production database writes must be run by the owner (auto mode refuses them). |
-| Next action            | Owner runs `supabase db push` for `20260921120000_article_withdrawal.sql`; then push the web change, run one manual article to `VERIFIED` on production, and schedule the worker. |
+| Next action            | Owner runs `supabase db push --include-seed` (six migrations plus seeds); then push `main`, set discovery targets, and run the worker continuously. |
 
 ## Status legend
 
@@ -58,8 +58,11 @@ This is the authoritative live record of implementation progress. Update it imme
       DNS values in Cloudflare (apex canonical, `www` redirects, valid TLS).
 - [x] Provision hosted Supabase, set the Vercel variables, and pass the production smoke checks.
 - [x] Add an article withdrawal path (migration, console action, docs, integration and browser tests).
-- [ ] Apply the withdrawal migration to production, run one production article to `VERIFIED`, and
-      schedule the worker.
+- [x] Apply the withdrawal migration to production.
+- [x] Add owner-requested topic discovery (ten categories with daily targets, 30-minute news scans,
+      review before scheduling), ChatGPT images through Codex, and discarding.
+- [ ] Apply the discovery migrations to production, run one production article to `VERIFIED`, and
+      run the worker continuously.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -328,6 +331,69 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Topic discovery, ChatGPT images through Codex, and discard
+
+Date/time: 2026-09-21 16:00, Asia/Singapore
+
+Phase/task: Phase 12 — owner-requested automation before the first production article
+
+Status change: Phase 12 remains `IN_PROGRESS`. The owner asked for topics to be suggested every
+30 minutes from real recent news across ten categories, with a per-category daily number set in
+Settings, articles written automatically, and a manual approve-and-schedule step before anything
+is published; images must come from ChatGPT because it has no visible watermark.
+
+What changed:
+
+- **`codex_image` mode** (`20260921130000`, `20260921130100`): the images stage can run Codex's
+  built-in image tool on the ChatGPT subscription. The worker reads the file Codex saves under
+  `<CODEX_HOME>/generated_images/<thread id>/`, validates type, size, dimensions, and aspect ratio,
+  records the hash, and deletes the folder. Accepted by `provider_mode_allowed`, `provider_of_mode`
+  (OpenAI), and `admin_update_provider_setting`; offered in the console.
+- **Discard** (`20260921140000`, `20260921140100`): terminal `DISCARDED` job status reachable from
+  every unpublished status (19 transitions, map 99 -> 118) through `admin_discard_job` with a
+  required reason; refused under a live lease. Console control with confirmation; TypeScript map,
+  controls, and status display follow.
+- **Topic discovery** (`20260921150000`): `topic_categories` (ten launch categories, daily target
+  0–12, seeded off), discovery settings on `site_settings` (enabled, interval 15–720 minutes,
+  image count), job provenance (`origin`, `topic_category_id`, `discovery_source`, unique source
+  URL), and `topic_discovery_runs`. `worker_begin_topic_discovery` decides when a scan is due
+  (single flight, interval, abandoned scans closed after an hour) and which categories owe an
+  article, pacing each target through the publication day; `worker_create_discovered_job`
+  re-checks quota and URL under a row lock and starts a job on `codex_cli`/`claude_code`/
+  `codex_image`/`codex_cli` with auto-publish off; `worker_finish_topic_discovery` records the
+  outcome. Admin RPCs update settings and targets and request an immediate scan. The worker checks
+  for a due scan before claiming (at most once a minute), runs the reviewed `topic-discovery`
+  prompt through Codex with live web search, filters stale, duplicate, and unrequested stories,
+  and heartbeats throughout. Settings gains **Topic discovery** and **Recent scans**; the dashboard
+  gains **Ready for review**; the job page shows the originating story.
+
+Files/migrations affected: five migrations above, `supabase/seed.sql`, `prompts/topic-discovery.md`,
+generated prompt seed and database types, `local-worker/src/discovery/*`,
+`local-worker/src/providers/cli/{codex,codex-images,adapters,base}.ts`, registry and runner,
+worker CLI, web state machine, admin actions, discovery loader, settings form, dashboard, job page,
+and controls; tests and docs (`PROVIDERS`, `STATE-MACHINE`, `LOCAL-WORKER`, `ADMIN-CONSOLE`).
+
+Verification performed: fresh `supabase db reset --local`, `db:lint` clean, types regenerated,
+prompt seed and worker contracts current. `pnpm test` 400 passed (new: Codex image-run parsing,
+path-safe thread ids, aspect-ratio rejection, generated-file read and cleanup, discovery selection,
+prompt rendering, and failed-scan handling). `pnpm test:integration` 162 passed (new: discard from
+approved, paused, pending, and escalated jobs, lease refusal, role and stale-page refusals, and
+terminality; transition parity at 118; discovery scheduling, single flight, scan-now, quota,
+duplicate-story refusal, worker ownership, abandoned-scan recovery, subscription modes, and
+permissions; `codex_image` provider setting). `pnpm test:e2e:admin` 18 passed (new: an approved
+article listed for review and discarded from its page; discovery targets saved per category and a
+scan requested). `pnpm test:e2e` 61 passed. Live checks against the real Codex 0.146.0 on this PC:
+two 1672×941 PNG hero images through the worker's own code in about 88 seconds each with the
+folder cleaned up afterwards, and a live discovery scan that returned three real stories from the
+previous three days (FinTech Futures, Euronews, West Midlands Police) with UK angles.
+
+Result: Passed locally. Not yet on production.
+
+Commit/PR: `29a3b7e` (ChatGPT images), `42f5e8f` (discard), and the commit that adds this entry.
+
+Next action: Owner runs `pnpm exec supabase db push --include-seed`; then push `main`, confirm CI,
+set category targets, and start the worker continuously.
 
 ### 2026-09-21 — Article withdrawal
 

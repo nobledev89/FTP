@@ -23,6 +23,11 @@ const TEMPLATES = [
   { key: "image-brief", file: "image-brief.md", notes: "Gemini image stage, one brief per slot." },
   { key: "audit", file: "audit.md", notes: "OpenAI editorial audit stage." },
   { key: "revise", file: "revise.md", notes: "Claude revision stage." },
+  {
+    key: "topic-discovery",
+    file: "topic-discovery.md",
+    notes: "Codex news search that proposes discovered topics.",
+  },
 ];
 
 const PLACEHOLDER = /\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}/g;

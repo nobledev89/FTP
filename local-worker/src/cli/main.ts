@@ -16,6 +16,7 @@ import { CacheRevalidationClient } from "../publishing/revalidate.js";
 import { WorkerRunner } from "../queue/runner.js";
 import { buildStatusReport } from "../status/status.js";
 import { VerificationService } from "../verification/verify.js";
+import { SupabaseDiscoveryStore, TopicDiscoveryService } from "../discovery/service.js";
 
 type Command = "once" | "start" | "status";
 
@@ -121,6 +122,12 @@ async function main(): Promise<number> {
     handlers,
     logger,
     providerHealth: () => capabilities.health(),
+    discovery: new TopicDiscoveryService(
+      new SupabaseDiscoveryStore(client),
+      cli.codex,
+      env.WORKER_ID,
+      logger,
+    ),
   });
 
   try {

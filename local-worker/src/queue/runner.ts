@@ -56,6 +56,10 @@ type RunnerOptions = {
   leaseRenewIntervalMs?: number;
   /** Extra heartbeat detail, such as the subscription CLIs' capability probes. */
   providerHealth?: () => Record<string, Json>;
+  /** Topic discovery, checked before claiming work so a busy queue cannot starve it. */
+  discovery?: Readonly<{ runIfDue(signal: AbortSignal): Promise<unknown> }>;
+  /** How often to ask the database whether a scan is due. The database owns the real interval. */
+  discoveryCheckIntervalMs?: number;
 };
 
 export class WorkerRunner {
@@ -68,6 +72,9 @@ export class WorkerRunner {
   private readonly startedAt: string;
   private readonly leaseRenewIntervalMs: number;
   private readonly providerHealth: (() => Record<string, Json>) | undefined;
+  private readonly discovery: RunnerOptions["discovery"];
+  private readonly discoveryCheckIntervalMs: number;
+  private lastDiscoveryCheck = Number.NEGATIVE_INFINITY;
 
   constructor(options: RunnerOptions) {
     this.env = options.env;
@@ -80,6 +87,8 @@ export class WorkerRunner {
     this.random = options.random ?? Math.random;
     this.startedAt = this.now().toISOString();
     this.providerHealth = options.providerHealth;
+    this.discovery = options.discovery;
+    this.discoveryCheckIntervalMs = options.discoveryCheckIntervalMs ?? 60_000;
     this.leaseRenewIntervalMs =
       options.leaseRenewIntervalMs ??
       Math.max(
@@ -103,6 +112,8 @@ export class WorkerRunner {
 
     const recovered = await this.store.recoverExpiredLeases();
     if (recovered > 0) this.logger.warn("leases.recovered", { count: recovered });
+
+    await this.maybeDiscover(signal);
 
     const stages = this.supportedStages;
     if (stages.length === 0) {
@@ -137,6 +148,29 @@ export class WorkerRunner {
     } finally {
       await this.tryHeartbeat("stopped");
       this.logger.info("worker.stopped");
+    }
+  }
+
+  /**
+   * A scan takes a minute or two of Codex web search, longer than the offline threshold, so the
+   * heartbeat keeps running while it does. A failed scan is logged, never thrown into the queue.
+   */
+  private async maybeDiscover(signal: AbortSignal): Promise<void> {
+    if (!this.discovery) return;
+    const now = this.now().getTime();
+    if (now - this.lastDiscoveryCheck < this.discoveryCheckIntervalMs) return;
+    this.lastDiscoveryCheck = now;
+
+    const heartbeat = setInterval(() => {
+      void this.tryHeartbeat("discovering");
+    }, this.env.WORKER_HEARTBEAT_INTERVAL_MS);
+    try {
+      await this.discovery.runIfDue(signal);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      this.logger.warn("discovery.check_failed", { error });
+    } finally {
+      clearInterval(heartbeat);
     }
   }
 

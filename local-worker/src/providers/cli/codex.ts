@@ -176,7 +176,7 @@ export class CodexCli extends SubscriptionCli {
         "--output-last-message",
         lastMessageFile,
         "-c",
-        `web_search="${request.stage === "research" ? "live" : "disabled"}"`,
+        `web_search="${request.stage === "research" || request.stage === "discovery" ? "live" : "disabled"}"`,
         ...(this.settings.model ? ["--model", this.settings.model] : []),
         ...(this.settings.reasoningEffort
           ? ["-c", `model_reasoning_effort="${this.settings.reasoningEffort}"`]

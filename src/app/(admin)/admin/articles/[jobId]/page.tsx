@@ -185,8 +185,26 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
                     : "Publication default",
                 ],
                 ["Created", formatDateTime(job.created_at)],
+                ["Origin", job.origin === "discovery" ? "Topic discovery" : "Editor"],
               ]}
             />
+            {job.discovery_source ? (
+              <p className="mt-4 text-sm">
+                <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+                  Discovered from
+                </span>{" "}
+                <a
+                  className="text-accent hover:underline"
+                  href={job.discovery_source.url}
+                  rel="noreferrer nofollow"
+                  target="_blank"
+                >
+                  {job.discovery_source.headline}
+                </a>
+                {job.discovery_source.publisher ? ` · ${job.discovery_source.publisher}` : ""}
+                {job.discovery_source.published_at ? ` · ${job.discovery_source.published_at}` : ""}
+              </p>
+            ) : null}
             {job.requirements ? (
               <div className="mt-4">
                 <h3 className="text-xs font-medium uppercase tracking-wide text-text-subtle">

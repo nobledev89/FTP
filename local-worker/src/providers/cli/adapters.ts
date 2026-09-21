@@ -99,6 +99,8 @@ export type CliAdapterSet = Readonly<{
   revision: StageAdapter<DraftStageInput, DraftOutput>;
   images: StageAdapter<ImageStageInput, ImageStageOutput>;
   audit: StageAdapter<AuditStageInput, AuditOutput>;
+  /** Codex itself, for topic discovery, which is not a pipeline stage. */
+  codex: StructuredCli;
   clis: readonly StructuredCli[];
 }>;
 
@@ -149,6 +151,7 @@ export function createCliAdapters(settings: CliSettings): CliAdapterSet {
       codex,
       auditOutputSchema,
     ),
+    codex,
     clis: [claude, codex],
   };
 }

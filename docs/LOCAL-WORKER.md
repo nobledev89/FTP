@@ -47,6 +47,25 @@ the current provider settings and requires only keys for API providers selected 
 switched while an already-running worker lacks its key stops as an actionable authentication
 failure. It is never replaced with a mock, CLI, manual, or different API mode.
 
+### Topic discovery
+
+Before each claim, at most once a minute, the worker asks `worker_begin_topic_discovery` whether a
+scan is due. The database answers from the Settings page: discovery must be on, the scan interval
+must have passed (or an editor pressed **Scan now**), and some category must still owe an article
+today. Each category's daily target is paced through the publication day, so a target of two
+yields one article in each half of the day.
+
+A due scan sends the reviewed `topic-discovery` prompt to Codex with live web search. The worker
+keeps at most one fresh story per due category (three days old at most; fourteen for explainers),
+drops stories already covered in the last fortnight, and calls `worker_create_discovered_job` for
+each. The database re-checks the quota and the source URL under a row lock and starts a normal job:
+research and audit on `codex_cli`, writing on `claude_code`, the hero image on `codex_image`, and
+auto-publish off, so every discovered article stops at `APPROVED` in the dashboard's **Ready for
+review** list for an editor to schedule or discard. A scan takes one to three minutes; the worker
+keeps heartbeating meanwhile. A failed scan is recorded on the Settings page and retried at the
+next interval; it never affects the job queue. Discovery needs the worker running continuously
+(`worker:start` or a scheduled `worker:once`).
+
 At start-up (and every ten minutes under `worker:start`) the worker probes both CLIs — version,
 supported options, and sign-in, never a prompt — and includes the result in its heartbeat, where the
 console's Providers page shows it. Each CLI stage probes again immediately before it sends a prompt.

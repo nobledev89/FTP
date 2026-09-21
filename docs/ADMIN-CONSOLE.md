@@ -58,6 +58,25 @@ Every action carries the `lock_version` the page was rendered with. If someone e
 the action is refused with "This job changed since the page was loaded" rather than overwriting their
 work. Escalating and resolving both require a note, which is recorded on the timeline.
 
+### Discarding an article
+
+Any job that is not yet published has a **Discard article** form under Controls, with a required
+reason and a confirmation tick. The job moves to the terminal `DISCARDED` status; its drafts,
+audits, and timeline are kept. A stage that is running must finish (or be paused) first.
+
+### Topic discovery and review
+
+**Settings → Topic discovery** turns automatic article discovery on or off, sets how often the
+worker scans (default every 30 minutes), whether discovered articles get a ChatGPT hero image, and
+a daily target (0–12) for each of the ten categories. **Scan now** makes the worker's next poll
+scan immediately; daily targets still apply. **Recent scans** lists the last ten scans with what
+they found, what they created, and any error.
+
+Discovered articles run research, writing, image, and audit unattended on the worker PC and then
+wait on the dashboard under **Ready for review**, with the news story they came from. Open one to
+read the draft, then **Schedule publication** for the time you want, or discard it. Discovered
+articles never publish on their own.
+
 ### Withdrawing an article
 
 An owner or editor can take a live article down from the **Published article** panel. It needs a

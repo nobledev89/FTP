@@ -73,6 +73,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           desired_publish_at: string | null
+          discovery_source: Json | null
           failed_stage: Database["public"]["Enums"]["pipeline_stage"] | null
           failure_summary: string | null
           id: string
@@ -88,6 +89,7 @@ export type Database = {
             | Database["public"]["Enums"]["pipeline_stage"]
             | null
           next_attempt_at: string | null
+          origin: string
           paused_from_status: Database["public"]["Enums"]["job_status"] | null
           requirements: string | null
           research_mode: Database["public"]["Enums"]["provider_mode"]
@@ -96,6 +98,7 @@ export type Database = {
           status: Database["public"]["Enums"]["job_status"]
           target_word_count: number | null
           topic: string
+          topic_category_id: string | null
           updated_at: string
           writing_mode: Database["public"]["Enums"]["provider_mode"]
         }
@@ -119,6 +122,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           desired_publish_at?: string | null
+          discovery_source?: Json | null
           failed_stage?: Database["public"]["Enums"]["pipeline_stage"] | null
           failure_summary?: string | null
           id?: string
@@ -134,6 +138,7 @@ export type Database = {
             | Database["public"]["Enums"]["pipeline_stage"]
             | null
           next_attempt_at?: string | null
+          origin?: string
           paused_from_status?: Database["public"]["Enums"]["job_status"] | null
           requirements?: string | null
           research_mode: Database["public"]["Enums"]["provider_mode"]
@@ -142,6 +147,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["job_status"]
           target_word_count?: number | null
           topic: string
+          topic_category_id?: string | null
           updated_at?: string
           writing_mode: Database["public"]["Enums"]["provider_mode"]
         }
@@ -165,6 +171,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           desired_publish_at?: string | null
+          discovery_source?: Json | null
           failed_stage?: Database["public"]["Enums"]["pipeline_stage"] | null
           failure_summary?: string | null
           id?: string
@@ -180,6 +187,7 @@ export type Database = {
             | Database["public"]["Enums"]["pipeline_stage"]
             | null
           next_attempt_at?: string | null
+          origin?: string
           paused_from_status?: Database["public"]["Enums"]["job_status"] | null
           requirements?: string | null
           research_mode?: Database["public"]["Enums"]["provider_mode"]
@@ -188,6 +196,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["job_status"]
           target_word_count?: number | null
           topic?: string
+          topic_category_id?: string | null
           updated_at?: string
           writing_mode?: Database["public"]["Enums"]["provider_mode"]
         }
@@ -225,6 +234,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_jobs_topic_category_id_fkey"
+            columns: ["topic_category_id"]
+            isOneToOne: false
+            referencedRelation: "topic_categories"
             referencedColumns: ["id"]
           },
         ]
@@ -1229,6 +1245,10 @@ export type Database = {
           created_at: string
           default_byline_name: string
           default_byline_role: string | null
+          discovery_enabled: boolean
+          discovery_image_count: number
+          discovery_interval_minutes: number
+          discovery_last_started_at: string | null
           editorial_contact_email: string | null
           extra: Json
           seo_default_description: string | null
@@ -1246,6 +1266,10 @@ export type Database = {
           created_at?: string
           default_byline_name?: string
           default_byline_role?: string | null
+          discovery_enabled?: boolean
+          discovery_image_count?: number
+          discovery_interval_minutes?: number
+          discovery_last_started_at?: string | null
           editorial_contact_email?: string | null
           extra?: Json
           seo_default_description?: string | null
@@ -1263,6 +1287,10 @@ export type Database = {
           created_at?: string
           default_byline_name?: string
           default_byline_role?: string | null
+          discovery_enabled?: boolean
+          discovery_image_count?: number
+          discovery_interval_minutes?: number
+          discovery_last_started_at?: string | null
           editorial_contact_email?: string | null
           extra?: Json
           seo_default_description?: string | null
@@ -1406,6 +1434,103 @@ export type Database = {
           },
         ]
       }
+      topic_categories: {
+        Row: {
+          created_at: string
+          daily_target: number
+          guidance: string
+          id: string
+          name: string
+          site_id: string
+          slug: string
+          sort_order: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          daily_target?: number
+          guidance: string
+          id?: string
+          name: string
+          site_id: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          daily_target?: number
+          guidance?: string
+          id?: string
+          name?: string
+          site_id?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_categories_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      topic_discovery_runs: {
+        Row: {
+          candidates: number | null
+          categories: string[]
+          created_job_ids: string[]
+          error: string | null
+          finished_at: string | null
+          id: number
+          site_id: string
+          started_at: string
+          status: string
+          usage: Json
+          worker_id: string
+        }
+        Insert: {
+          candidates?: number | null
+          categories?: string[]
+          created_job_ids?: string[]
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          site_id: string
+          started_at?: string
+          status?: string
+          usage?: Json
+          worker_id: string
+        }
+        Update: {
+          candidates?: number | null
+          categories?: string[]
+          created_job_ids?: string[]
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          site_id?: string
+          started_at?: string
+          status?: string
+          usage?: Json
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_discovery_runs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       worker_instances: {
         Row: {
           created_at: string
@@ -1520,6 +1645,7 @@ export type Database = {
           job_status: Database["public"]["Enums"]["job_status"]
         }[]
       }
+      admin_request_discovery_scan: { Args: never; Returns: undefined }
       admin_transition_job: {
         Args: {
           p_action: string
@@ -1533,6 +1659,14 @@ export type Database = {
           lock_version: number
           status: Database["public"]["Enums"]["job_status"]
         }[]
+      }
+      admin_update_discovery_settings: {
+        Args: {
+          p_enabled: boolean
+          p_image_count: number
+          p_interval_minutes: number
+        }
+        Returns: undefined
       }
       admin_update_provider_setting: {
         Args: {
@@ -1567,6 +1701,10 @@ export type Database = {
           p_worker_stale_after_seconds: number
         }
         Returns: Json
+      }
+      admin_update_topic_category: {
+        Args: { p_category_id: string; p_daily_target: number }
+        Returns: undefined
       }
       admin_withdraw_article: {
         Args: {
@@ -1708,6 +1846,42 @@ export type Database = {
           p_worker_id: string
         }
         Returns: Database["public"]["Enums"]["job_status"]
+      }
+      worker_begin_topic_discovery: {
+        Args: { p_worker_id: string }
+        Returns: {
+          categories: Json
+          recent_topics: Json
+          run_id: number
+          site_id: string
+          site_name: string
+          timezone: string
+          today: string
+        }[]
+      }
+      worker_create_discovered_job: {
+        Args: {
+          p_article_type: Database["public"]["Enums"]["article_type"]
+          p_category_id: string
+          p_keywords: string[]
+          p_requirements: string
+          p_run_id: number
+          p_source: Json
+          p_topic: string
+          p_worker_id: string
+        }
+        Returns: string
+      }
+      worker_finish_topic_discovery: {
+        Args: {
+          p_candidates?: number
+          p_error?: string
+          p_run_id: number
+          p_succeeded: boolean
+          p_usage?: Json
+          p_worker_id: string
+        }
+        Returns: undefined
       }
       worker_status: { Args: { p_worker_id: string }; Returns: Json }
     }

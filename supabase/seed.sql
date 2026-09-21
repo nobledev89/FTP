@@ -36,3 +36,33 @@ cross join (values
 ) as v(stage, mode)
 where s.slug = 'fintechpulse'
 on conflict (site_id, stage) do nothing;
+
+-- Topic discovery categories (20260921150000_topic_discovery.sql). Every daily target starts at 0,
+-- so nothing is discovered until an editor sets one.
+insert into public.topic_categories (site_id, slug, name, guidance, sort_order)
+select s.id, c.slug, c.name, c.guidance, c.sort_order
+from public.sites s
+cross join (values
+  (1, 'fintech-news', 'Fintech News',
+   'Company news from Revolut, Monzo, Wise, Stripe, Klarna, PayPal, Adyen, Starling and other fintechs active in the UK: launches, results, funding, licences, leadership changes, and regulatory action.'),
+  (2, 'ai-finance', 'AI & Finance',
+   'AI advisers, agentic AI, AI trading tools, bank automation, and how financial institutions use AI in fraud, credit, compliance, and risk management.'),
+  (3, 'payments', 'Payments',
+   'Apple Pay, Google Pay, QR and instant payments, cross-border payments, payment APIs, merchant tools, and payment infrastructure.'),
+  (4, 'open-banking', 'Open Banking',
+   'UK open banking and open finance: APIs, variable recurring payments, bank connectivity, and the regulatory roadmap.'),
+  (5, 'digital-banks', 'Digital Banks',
+   'Revolut, Monzo, Starling, Chase UK, Kroo, bunq, N26, and other digital banks serving UK customers.'),
+  (6, 'crypto-tokenisation', 'Crypto, Stablecoins & Tokenisation',
+   'The financial and business side only: stablecoins, tokenised deposits and assets, institutional adoption, and UK regulation. Never crypto-price speculation.'),
+  (7, 'fraud-security', 'Fraud & Cybersecurity',
+   'Scams, APP fraud and reimbursement, AI-powered fraud, data breaches, AML, and identity verification.'),
+  (8, 'business-fintech', 'Fintech for Business',
+   'Payment processors, accounting fintech, expense cards, business banking, payroll, and embedded finance.'),
+  (9, 'explainers', 'Explainers & Guides',
+   'Evergreen explainers and guides that stay useful for years, prompted by a current development but written to last.'),
+  (10, 'uk-fintech', 'UK Fintech',
+   'The UK fintech sector itself: FCA, Bank of England, and Treasury decisions, investment, listings, and the London ecosystem.')
+) as c (sort_order, slug, name, guidance)
+where s.slug = 'fintechpulse'
+on conflict (site_id, slug) do nothing;

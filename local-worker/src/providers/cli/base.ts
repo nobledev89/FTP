@@ -53,7 +53,7 @@ export type CliRuntimeOptions = Readonly<{
 }>;
 
 export type StructuredRequest = Readonly<{
-  stage: "research" | "draft" | "revision" | "audit";
+  stage: "research" | "draft" | "revision" | "audit" | "discovery";
   prompt: string;
   schema: Readonly<Record<string, unknown>>;
   signal: AbortSignal;

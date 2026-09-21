@@ -11,7 +11,7 @@ free mode never silently becomes a billable one (plan section 2, decision 6).
 | ------------------ | ------------------------------------------------------- | ----------------- |
 | Research           | `mock`, `manual_chatgpt`, `codex_cli`, `openai_api`     | `manual_chatgpt`  |
 | Draft and revision | `mock`, `manual_claude`, `claude_code`, `anthropic_api` | `claude_code`     |
-| Images             | `mock`, `manual_gemini`, `gemini_api`                   | `manual_gemini`   |
+| Images             | `mock`, `manual_gemini`, `codex_image`, `gemini_api`    | `manual_gemini`   |
 | Audit              | `mock`, `manual_chatgpt`, `codex_cli`, `openai_api`     | `manual_chatgpt`  |
 | Publish and verify | `internal` (deterministic services, no provider)        | `internal`        |
 
@@ -26,6 +26,22 @@ prompt snapshot, provider run, and artifact version is kept.
 - **Subscription CLI** modes run Claude Code or Codex on the worker PC, as described below.
 - **API** modes make metered requests from the worker PC only, after the cost confirmation and key
   checks described below.
+
+## ChatGPT images through Codex (`codex_image`)
+
+`codex_image` generates each image brief with Codex's built-in image tool on the worker PC's ChatGPT
+subscription: no API key, no per-image bill, and no visible watermark. It runs the same signed-in
+Codex as `codex_cli` (read-only sandbox, `--ephemeral`, `--ignore-user-config`, web search off) and
+prompts it with the reviewed `image-brief` template plus an instruction to generate exactly one
+image and reply `DONE`.
+
+`codex exec` cannot name an output file, and the read-only sandbox stops the agent copying one, so
+the worker reads the file Codex itself saves under `<CODEX_HOME>/generated_images/<thread id>/`
+(the thread id comes from the first JSONL event and is checked as a UUID) and then deletes that
+folder. The bytes' real type, size, dimensions, and SHA-256 are recorded; alt text and aspect ratio
+come from the approved draft's brief, as for `gemini_api`. An image whose shape is more than 6% off
+the brief's aspect ratio (Codex renders 16:9 as 1672×941) is rejected as invalid output. One image
+takes about 60–90 seconds. Checked against codex-cli 0.146.0 on 2026-09-21.
 
 ## Optional metered APIs
 

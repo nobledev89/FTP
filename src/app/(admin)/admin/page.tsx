@@ -7,6 +7,7 @@ import { JobStatusBadge } from "@/components/admin/job-status-badge";
 import { EmptyState, Notice, Panel, StatTile } from "@/components/admin/panel";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { getAdminDashboard } from "@/lib/admin/dashboard";
+import { listReadyForReview } from "@/lib/admin/discovery";
 import { formatCount, formatDateTime, formatRelativeTime } from "@/lib/admin/format";
 import { GROUP_LABELS, filterParams, parseJobFilters } from "@/lib/admin/job-filters";
 import { listJobs } from "@/lib/admin/jobs";
@@ -37,9 +38,10 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
   const filters = parseJobFilters(params);
   const page = parsePage(params.page);
 
-  const [dashboard, jobs] = await Promise.all([
+  const [dashboard, jobs, readyForReview] = await Promise.all([
     getAdminDashboard(),
     listJobs(filters, page, DEFAULT_PAGE_SIZE),
+    listReadyForReview(session.siteId),
   ]);
 
   const generatedAt = new Date(dashboard.generated_at);
@@ -78,6 +80,49 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
             No worker has ever reported in. Started jobs will sit in their pending status until the
             local worker runs on the owner&rsquo;s PC. See docs/LOCAL-WORKER.md.
           </Notice>
+        ) : null}
+
+        {readyForReview.length > 0 ? (
+          <Panel
+            description="Written and audited. Open each one to read it, then schedule it or discard it."
+            title={`Ready for review (${readyForReview.length})`}
+          >
+            <ul className="grid gap-3">
+              {readyForReview.map((item) => (
+                <li className="grid gap-1" key={item.id}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.category ? <StatusBadge tone="info">{item.category}</StatusBadge> : null}
+                    <Link
+                      className="text-sm font-medium text-accent hover:underline"
+                      href={`/admin/articles/${item.id}`}
+                    >
+                      {item.topic}
+                    </Link>
+                  </div>
+                  {item.discovery_source ? (
+                    <p className="text-xs text-text-muted">
+                      From{" "}
+                      <a
+                        className="hover:underline"
+                        href={item.discovery_source.url}
+                        rel="noreferrer nofollow"
+                        target="_blank"
+                      >
+                        {item.discovery_source.headline}
+                      </a>
+                      {item.discovery_source.publisher
+                        ? ` · ${item.discovery_source.publisher}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  <p className="font-mono text-[11px] text-text-subtle">
+                    {item.origin === "discovery" ? "discovered" : "editor"} · ready{" "}
+                    {formatRelativeTime(item.updated_at, generatedAt)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Panel>
         ) : null}
 
         <section aria-label="Queue summary">

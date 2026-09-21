@@ -98,6 +98,15 @@ The database applies artifact gates as well as the transition map. An escalation
 or images cannot skip forward. Resolving to `APPROVED` requires the latest valid draft to be covered by
 the latest audit. A third automatic revision cycle is not allowed.
 
+### Discarding
+
+`admin_discard_job` moves any unpublished job — every pausable status, plus `PAUSED`, `FAILED`, and
+`NEEDS_HUMAN` — to the terminal `DISCARDED` status with a required reason (3–500 characters). It
+is refused while a stage runs under a live lease, clears an expired lease and any pending manual
+action, and keeps every artifact. Nothing leaves `DISCARDED`. Published work is taken down with
+`admin_withdraw_article` instead, which marks the article withdrawn and leaves the job's status
+alone.
+
 ### Manual provider waits
 
 `request_manual_action` keeps the current active status, releases the worker lease, connects the job to

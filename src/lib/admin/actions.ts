@@ -509,6 +509,98 @@ export async function discardJobAction(
 }
 
 // ---------------------------------------------------------------------------
+// Topic discovery
+// ---------------------------------------------------------------------------
+
+const discoverySettingsSchema = z.object({
+  enabled: z.boolean(),
+  intervalMinutes: z.coerce.number().int().min(15).max(720),
+  imageCount: z.coerce.number().int().min(0).max(1),
+  targets: z.array(
+    z.object({ categoryId: uuidSchema, dailyTarget: z.coerce.number().int().min(0).max(12) }),
+  ),
+});
+
+/**
+ * Saves the discovery switch, interval, image count, and every category's daily target. Each
+ * target is its own authorized RPC; the form posts them all so a cleared field is saved as 0.
+ */
+export async function updateDiscoverySettingsAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const targets = [...formData.entries()]
+      .filter(([key]) => key.startsWith("target:"))
+      .map(([key, value]) => ({
+        categoryId: key.slice("target:".length),
+        dailyTarget: String(value).trim() === "" ? "0" : String(value),
+      }));
+    const parsed = discoverySettingsSchema.safeParse({
+      enabled: formData.get("enabled") === "on",
+      intervalMinutes: formData.get("intervalMinutes"),
+      imageCount: formData.get("imageCount"),
+      targets,
+    });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        ok: false,
+        error:
+          issue?.path[0] === "targets"
+            ? "Daily targets must be whole numbers from 0 to 12."
+            : firstIssue(parsed.error),
+      };
+    }
+
+    const client = await createSupabaseServerClient();
+    const { error } = await client.rpc("admin_update_discovery_settings", {
+      p_enabled: parsed.data.enabled,
+      p_interval_minutes: parsed.data.intervalMinutes,
+      p_image_count: parsed.data.imageCount,
+    });
+    if (error) throw error;
+    for (const target of parsed.data.targets) {
+      const result = await client.rpc("admin_update_topic_category", {
+        p_category_id: target.categoryId,
+        p_daily_target: target.dailyTarget,
+      });
+      if (result.error) throw result.error;
+    }
+
+    revalidatePath("/admin/settings");
+    const total = parsed.data.targets.reduce((sum, target) => sum + target.dailyTarget, 0);
+    return {
+      ok: true,
+      message: parsed.data.enabled
+        ? `Discovery is on: up to ${total} article${total === 1 ? "" : "s"} a day.`
+        : "Discovery settings saved. Discovery is off.",
+    };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+/** Makes the worker's next poll scan now instead of waiting out the interval. */
+export async function requestDiscoveryScanAction(): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const client = await createSupabaseServerClient();
+    const { error } = await client.rpc("admin_request_discovery_scan");
+    if (error) throw error;
+    revalidatePath("/admin/settings");
+    return {
+      ok: true,
+      message:
+        "Scan requested. The worker starts it within a minute if a category still needs an article today.",
+    };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Prompt versions
 // ---------------------------------------------------------------------------
 
