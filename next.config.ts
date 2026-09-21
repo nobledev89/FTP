@@ -35,13 +35,9 @@ const nextConfig: NextConfig = {
   experimental: {
     // Public and admin have separate root layouts (ADR 0004), so unmatched URLs need a global 404.
     globalNotFound: true,
-    // Manual Gemini uploads accept one image per action. Supabase and the application both enforce
-    // a 10 MB file limit; the extra room covers multipart boundaries and the small metadata fields.
-    serverActions: { bodySizeLimit: "11mb" },
-    // src/proxy.ts runs on /admin, and a proxied request body is buffered only up to this size (10 MB
-    // by default). Anything beyond it is silently dropped, which would corrupt the largest uploads
-    // the action above accepts, so the two limits must match.
-    proxyClientMaxBodySize: "11mb",
+    // Manual provider JSON is capped at one million characters. Image bytes upload directly to
+    // private Supabase Storage and never enter a Server Action request.
+    serverActions: { bodySizeLimit: "2mb" },
   },
   redirects() {
     return [

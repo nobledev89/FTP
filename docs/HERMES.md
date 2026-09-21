@@ -3,6 +3,10 @@
 Hermes integrates with FinTechPulse through shell commands and exit codes. There is no Hermes SDK
 dependency and nothing listens for inbound connections on the worker PC.
 
+Prepare the machine and validate its environment first with
+[WINDOWS-SETUP.md](WINDOWS-SETUP.md). Do not schedule the worker until `pnpm env:check:worker` and
+`pnpm worker:status` both succeed under the same Windows account Hermes will use.
+
 ## Recommended command
 
 For periodic scheduling, run this command from the repository root:

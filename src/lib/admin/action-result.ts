@@ -7,5 +7,10 @@
 export type ActionResult =
   Readonly<{ ok: true; message: string }> | Readonly<{ ok: false; error: string }>;
 
+/** Path-scoped, short-lived Storage upload capability returned after a live-run preflight. */
+export type ManualImageUploadPreparationResult =
+  | Readonly<{ ok: true; upload: Readonly<{ path: string; token: string }> }>
+  | Readonly<{ ok: false; error: string }>;
+
 /** Starting value for `useActionState`: nothing has been submitted, so nothing is reported. */
 export const idleActionResult: ActionResult = { ok: true, message: "" };

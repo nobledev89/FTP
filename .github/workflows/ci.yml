@@ -31,6 +31,7 @@ jobs:
 
       - run: pnpm prompts:seed --check
       - run: pnpm contracts:sync --check
+      - run: pnpm env:check:examples
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck

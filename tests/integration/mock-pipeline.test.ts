@@ -428,7 +428,7 @@ describe("deterministic mock pipeline", () => {
     });
     const artifact = generated.artifacts[0]!;
     const file = generated.files[0]!;
-    const privatePath = `jobs/${jobId}/manual-test/slot-0-${artifact.contentHash!.slice(0, 12)}.png`;
+    const privatePath = `jobs/${jobId}/manual/${imageRunId}/slot-0-${crypto.randomUUID()}.png`;
     const uploaded = await editor.client.storage
       .from("article-work")
       .upload(privatePath, file.bytes, {
@@ -638,7 +638,7 @@ describe("deterministic mock pipeline", () => {
     });
     const artifact = generated.artifacts[0]!;
     const file = generated.files[0]!;
-    const privatePath = `jobs/${jobId}/manual-test/slot-0.png`;
+    const privatePath = `jobs/${jobId}/manual/${imageRunId}/slot-0-${crypto.randomUUID()}.png`;
     expect(
       (
         await editor.client.storage

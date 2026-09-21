@@ -28,6 +28,7 @@ supabase/.temp/
 # env files: only the documented example is committed
 .env*
 !.env.example
+!local-worker/.env.example
 
 # vercel
 .vercel

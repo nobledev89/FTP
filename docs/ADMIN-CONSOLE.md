@@ -97,10 +97,12 @@ expected JSON.
   fence is accepted). **Validate and continue** checks it against the shared artifact schema; a
   rejected response stays in the text box with the failing paths listed, and nothing is stored.
 - **Images** take one upload per requested slot with its alt text (required), caption, and optional
-  focal point. The server reads the file's real type and dimensions from its bytes, stores it in the
-  private `article-work` bucket, and records it as `ready`. Uploading a replacement creates a new
-  version. **Continue to audit** is enabled once every requested slot is ready; files become public
-  only when the publishing service copies approved versions.
+  focal point. An authorized preflight issues a short-lived upload token for that exact live
+  job/run/slot, and the browser sends the bytes straight to the private `article-work` bucket. The
+  server then reads the stored object back, derives its real type, dimensions, size, and hash from
+  the bytes, and records it as `ready`; browser-supplied file facts are never trusted. Uploading a
+  replacement creates a new version. **Continue to audit** is enabled once every requested slot is
+  ready; files become public only when the publishing service copies approved versions.
 - A paused job keeps its prompt on screen but accepts nothing until it is resumed. Escalating a
   waiting job cancels its run; resolving it later prepares a fresh prompt.
 

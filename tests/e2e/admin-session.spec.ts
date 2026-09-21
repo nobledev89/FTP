@@ -707,14 +707,35 @@ test.describe("authenticated admin console", () => {
       draft: articleDraft,
       draftVersion: 1,
     });
+    const directUploadRequests: string[] = [];
+    const actionRequestSizes: number[] = [];
+    const recordUploadRequest = (request: import("@playwright/test").Request) => {
+      const size = request.postDataBuffer()?.byteLength ?? 0;
+      if (request.url().includes("/storage/v1/object/upload/sign/")) {
+        directUploadRequests.push(request.url());
+      }
+      if (request.headers()["next-action"]) actionRequestSizes.push(size);
+    };
+    page.on("request", recordUploadRequest);
+    // A valid PNG may contain trailing bytes. Padding this fixture beyond Vercel's 4.5 MB function
+    // request limit proves the bytes go browser -> Supabase instead of through a Server Action.
+    const largeManualImage = Buffer.concat([
+      Buffer.from(generated.files[0]!.bytes),
+      Buffer.alloc(5_000_000),
+    ]);
     await page.getByLabel("Image file").setInputFiles({
       name: "gemini-hero.png",
       mimeType: "image/png",
-      buffer: Buffer.from(generated.files[0]!.bytes),
+      buffer: largeManualImage,
     });
     await page.getByLabel("Caption").fill("Generated in Gemini for the manual workflow check.");
     await page.getByRole("button", { name: "Upload image" }).click();
     await expect(page.getByText("Slot 0 image v1 is ready.")).toBeVisible();
+    page.off("request", recordUploadRequest);
+    expect(directUploadRequests).toHaveLength(1);
+    expect(directUploadRequests[0]).toMatch(/^http:\/\/127\.0\.0\.1:54321\/storage\//);
+    expect(actionRequestSizes.length).toBeGreaterThan(0);
+    expect(Math.max(...actionRequestSizes)).toBeLessThan(1_000_000);
     await expect(continueButton).toBeEnabled();
     await page.screenshot({
       path: "test-results/admin-review/manual-images-1440.png",
@@ -754,14 +775,16 @@ test.describe("authenticated admin console", () => {
     ]);
     const image = await service
       .from("images")
-      .select("status, caption, public_path")
+      .select("status, caption, public_path, byte_size")
       .eq("job_id", manualJobId)
       .single();
     expect(image.data).toMatchObject({
       status: "published",
       caption: "Generated in Gemini for the manual workflow check.",
       public_path: expect.stringMatching(/^articles\//),
+      byte_size: expect.any(Number),
     });
+    expect(image.data!.byte_size).toBeGreaterThan(4_500_000);
 
     await page.reload();
     await expect(page.getByText("VERIFIED").first()).toBeVisible();

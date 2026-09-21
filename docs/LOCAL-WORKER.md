@@ -8,11 +8,15 @@ Vercel. The queue and lease design is documented in
 ## Setup
 
 1. Run `pnpm install` at the repository root.
-2. Copy the worker section of `.env.example` to `local-worker/.env.local`.
+2. Copy `local-worker/.env.example` to `local-worker/.env.local`.
 3. Fill `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_SITE_URL`,
    `REVALIDATION_SECRET`, and a stable lowercase `WORKER_ID`.
 4. Keep the file on the worker PC. It is git-ignored and must never be copied to Vercel.
-5. Check connectivity with `pnpm worker:status`.
+5. Run `pnpm env:check:worker`, then check connectivity with `pnpm worker:status`.
+
+The complete clean-PC bootstrap is in [WINDOWS-SETUP.md](WINDOWS-SETUP.md). `pnpm env:check`
+validates both local files together and catches a different Supabase origin, public site origin, or
+revalidation secret before a worker can publish against the wrong deployment.
 
 The optional `WORKER_HOST_LABEL` is uploaded to the admin dashboard. It defaults to `WORKER_ID`; the
 worker deliberately does not upload the Windows hostname. Optional AI keys are not required until a

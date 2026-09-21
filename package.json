@@ -2,6 +2,7 @@
   "name": "fintechpulse",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Automated editorial publishing platform: public publication, admin, Supabase data layer, and a local Windows worker.",
   "license": "MIT",
   "packageManager": "pnpm@10.32.1",
@@ -31,7 +32,11 @@
     "db:lint": "supabase db lint --local --schema public,private --level warning --fail-on warning",
     "db:types": "node scripts/generate-db-types.mjs",
     "prompts:seed": "node scripts/generate-prompt-seed.mjs",
-    "contracts:sync": "node scripts/sync-worker-contracts.mjs"
+    "contracts:sync": "node scripts/sync-worker-contracts.mjs",
+    "env:check": "node scripts/validate-env.mts",
+    "env:check:web": "node scripts/validate-env.mts --web .env.local",
+    "env:check:worker": "node scripts/validate-env.mts --worker local-worker/.env.local",
+    "env:check:examples": "node scripts/validate-env.mts --examples"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

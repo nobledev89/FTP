@@ -27,21 +27,23 @@ After changing a migration, run `pnpm supabase:reset`, `pnpm db:lint`, `pnpm db:
 
 Migrations run in order:
 
-| File                                         | Contents                                                                                                                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `20260917100000_foundation.sql`              | `private` schema, default-privilege hardening, enums, pure helpers, history guards                                                                                 |
-| `20260917100100_identity_and_config.sql`     | `sites`, `admin_users`, authorization helpers, `prompt_templates`, `site_settings`, `provider_settings`, `worker_instances`                                        |
-| `20260917100200_content_and_artifacts.sql`   | `article_jobs`, `provider_runs`, research artifacts, `drafts`, `audits`, `images`, `articles`, slug aliases, `job_events`, `publishing_logs`, `originality_checks` |
-| `20260917100300_state_machine_and_queue.sql` | Transition map, job/article guards, worker functions, publication boundary, admin functions, owner bootstrap                                                       |
-| `20260917100400_rls_and_grants.sql`          | RLS on every table, explicit grants, policies                                                                                                                      |
-| `20260917100500_storage.sql`                 | `article-work` and `article-public` buckets and policies                                                                                                           |
-| `20260917100600_indexes.sql`                 | Queue, lease, dashboard, public list, and timeline indexes                                                                                                         |
-| `20260918100000_admin_console.sql`           | Admin membership helpers, `admin_dashboard`, `admin_update_site_settings`, `admin_update_site_identity`                                                            |
-| `20260918110000_worker_status.sql`           | Read-only worker heartbeat and exact queue-health snapshot                                                                                                         |
-| `20260918120000_mock_pipeline.sql`           | Authorized immutable prompt-version creation, activation, and rollback                                                                                             |
-| `20260918130000_manual_workflows.sql`        | Authorized manual import and image continuation, abandoned-run cancellation, implemented-mode provider defaults                                                    |
-| `20260918140000_subscription_cli_modes.sql`  | Enables the stage-specific Claude Code and Codex defaults                                                                                                          |
-| `20260918150000_api_provider_modes.sql`      | Enables stage-specific API defaults only with recorded metered-cost confirmation                                                                                   |
+| File                                             | Contents                                                                                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `20260917100000_foundation.sql`                  | `private` schema, default-privilege hardening, enums, pure helpers, history guards                                                                                 |
+| `20260917100100_identity_and_config.sql`         | `sites`, `admin_users`, authorization helpers, `prompt_templates`, `site_settings`, `provider_settings`, `worker_instances`                                        |
+| `20260917100200_content_and_artifacts.sql`       | `article_jobs`, `provider_runs`, research artifacts, `drafts`, `audits`, `images`, `articles`, slug aliases, `job_events`, `publishing_logs`, `originality_checks` |
+| `20260917100300_state_machine_and_queue.sql`     | Transition map, job/article guards, worker functions, publication boundary, admin functions, owner bootstrap                                                       |
+| `20260917100400_rls_and_grants.sql`              | RLS on every table, explicit grants, policies                                                                                                                      |
+| `20260917100500_storage.sql`                     | `article-work` and `article-public` buckets and policies                                                                                                           |
+| `20260917100600_indexes.sql`                     | Queue, lease, dashboard, public list, and timeline indexes                                                                                                         |
+| `20260918100000_admin_console.sql`               | Admin membership helpers, `admin_dashboard`, `admin_update_site_settings`, `admin_update_site_identity`                                                            |
+| `20260918110000_worker_status.sql`               | Read-only worker heartbeat and exact queue-health snapshot                                                                                                         |
+| `20260918120000_mock_pipeline.sql`               | Authorized immutable prompt-version creation, activation, and rollback                                                                                             |
+| `20260918130000_manual_workflows.sql`            | Authorized manual import and image continuation, abandoned-run cancellation, implemented-mode provider defaults                                                    |
+| `20260918140000_subscription_cli_modes.sql`      | Enables the stage-specific Claude Code and Codex defaults                                                                                                          |
+| `20260918150000_api_provider_modes.sql`          | Enables stage-specific API defaults only with recorded metered-cost confirmation                                                                                   |
+| `20260921100000_publishing_hardening.sql`        | Schedule horizon, revalidation logs, bounded verification retries                                                                                                  |
+| `20260921110000_direct_manual_image_uploads.sql` | Limits editor Storage inserts to the current manual image job/run/slot for direct uploads                                                                          |
 
 Design rules enforced by the database:
 
@@ -161,13 +163,16 @@ image slot fails with `22023`. When a job leaves a manual wait without an import
 
 ## Storage
 
-| Bucket           | Visibility | Path convention          | Writers                                         |
-| ---------------- | ---------- | ------------------------ | ----------------------------------------------- |
-| `article-work`   | Private    | `jobs/<job id>/...`      | Editors and owners (existing jobs only), worker |
-| `article-public` | Public URL | `articles/<slug>/<file>` | Worker (publishing service) only                |
+| Bucket           | Visibility | Path convention                                              | Writers                                               |
+| ---------------- | ---------- | ------------------------------------------------------------ | ----------------------------------------------------- |
+| `article-work`   | Private    | `jobs/<job>/manual/<run>/slot-<n>-<uuid>.<ext>` for browsers | Current manual-image editor via signed upload; worker |
+| `article-public` | Public URL | `articles/<slug>/<file>`                                     | Worker (publishing service) only                      |
 
 Both buckets accept PNG, JPEG, WebP, and AVIF up to 10 MB. Browser roles cannot overwrite, delete, or
-list objects.
+list objects. An editor can create a signed upload only while that exact `manual_gemini` run is the
+job's current action, the slot was requested, and the job is not paused. The import action downloads
+the private object and inspects its bytes; `admin_import_manual_image` independently checks the
+stored object's size and MIME metadata before recording a version.
 
 ## Authentication assumptions
 
@@ -210,3 +215,6 @@ list objects.
 
 7. Copy the **publishable** key to Vercel. Copy the **secret** (service role) key only into
    `local-worker/.env.local` on the worker PC. Never add it to Vercel.
+
+Continue with [DEPLOYMENT.md](DEPLOYMENT.md) for the Vercel preview, Cloudflare DNS, production
+smoke tests, and worker release order.

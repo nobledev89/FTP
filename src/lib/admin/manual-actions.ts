@@ -10,7 +10,7 @@ import { toWorkflowError, WorkflowError } from "@/lib/state-machine/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { pipelineStageSchema, providerModeSchema, uuidSchema } from "@/lib/validation/domain";
 
-import type { ActionResult } from "./action-result";
+import type { ActionResult, ManualImageUploadPreparationResult } from "./action-result";
 import { inspectImageFile, type InspectedImage } from "./image-file";
 import {
   manualImageMetadataSchema,
@@ -19,6 +19,18 @@ import {
 } from "./manual-validation";
 
 const idSchema = z.object({ jobId: uuidSchema, runId: uuidSchema });
+const imageUploadPreparationSchema = idSchema.extend({
+  slot: z.coerce.number().int().min(0),
+  mimeType: z.enum(["image/png", "image/jpeg", "image/webp", "image/avif"]),
+  byteSize: z.coerce.number().int().min(1).max(10_485_760),
+});
+
+const imageExtension = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/avif": "avif",
+} as const satisfies Record<z.infer<typeof imageUploadPreparationSchema>["mimeType"], string>;
 
 function firstIssue(error: z.ZodError): string {
   const issue = error.issues[0];
@@ -163,10 +175,51 @@ export async function importManualTextAction(
   }
 }
 
-export async function uploadManualImageAction(
-  _previous: ActionResult,
+export async function prepareManualImageUploadAction(
   formData: FormData,
-): Promise<ActionResult> {
+): Promise<ManualImageUploadPreparationResult> {
+  try {
+    await authorizeAdminAction("write");
+    const input = imageUploadPreparationSchema.safeParse({
+      jobId: formData.get("jobId"),
+      runId: formData.get("runId"),
+      slot: formData.get("slot"),
+      mimeType: formData.get("mimeType"),
+      byteSize: formData.get("byteSize"),
+    });
+    if (!input.success) return { ok: false, error: firstIssue(input.error) };
+
+    const { client, run, imageCount, paused, waiting } = await loadManualRun(
+      input.data.jobId,
+      input.data.runId,
+    );
+    if (paused) return { ok: false, error: PAUSED_MESSAGE };
+    if (
+      !waiting ||
+      run.status !== "action_required" ||
+      run.stage !== "images" ||
+      run.mode !== "manual_gemini"
+    ) {
+      return { ok: false, error: "This job is no longer waiting for a manual Gemini image." };
+    }
+    if (input.data.slot >= imageCount) {
+      return { ok: false, error: `Slot ${input.data.slot} was not requested for this job.` };
+    }
+
+    const path = `jobs/${input.data.jobId}/manual/${input.data.runId}/slot-${input.data.slot}-${randomUUID()}.${imageExtension[input.data.mimeType]}`;
+    const prepared = await client.storage
+      .from("article-work")
+      .createSignedUploadUrl(path, { upsert: false });
+    if (prepared.error) {
+      return { ok: false, error: `Could not prepare the image upload: ${prepared.error.message}` };
+    }
+    return { ok: true, upload: { path, token: prepared.data.token } };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+export async function importUploadedManualImageAction(formData: FormData): Promise<ActionResult> {
   try {
     await authorizeAdminAction("write");
     const ids = idSchema.safeParse({ jobId: formData.get("jobId"), runId: formData.get("runId") });
@@ -183,15 +236,6 @@ export async function uploadManualImageAction(
       focalY: String(formData.get("focalY") ?? ""),
     });
     if (!metadata.success) return { ok: false, error: manualValidationError(metadata.error) };
-
-    const file = formData.get("file");
-    if (!(file instanceof File)) return { ok: false, error: "Choose an image file." };
-    let inspected: InspectedImage;
-    try {
-      inspected = await inspectImageFile(file);
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Unreadable image." };
-    }
     const { client, run, imageCount, paused, waiting } = await loadManualRun(
       ids.data.jobId,
       ids.data.runId,
@@ -209,13 +253,29 @@ export async function uploadManualImageAction(
       return { ok: false, error: `Slot ${metadata.data.slot} was not requested for this job.` };
     }
 
-    const path = `jobs/${ids.data.jobId}/manual/${ids.data.runId}/slot-${metadata.data.slot}-${randomUUID()}.${inspected.extension}`;
-    const uploaded = await client.storage.from("article-work").upload(path, inspected.bytes, {
-      contentType: inspected.mimeType,
-      upsert: false,
-    });
-    if (uploaded.error) {
-      return { ok: false, error: `Could not upload the image: ${uploaded.error.message}` };
+    const path = String(formData.get("privatePath") ?? "");
+    const expectedPath = new RegExp(
+      `^jobs/${ids.data.jobId}/manual/${ids.data.runId}/slot-${metadata.data.slot}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|webp|avif)$`,
+    );
+    if (!expectedPath.test(path)) {
+      return { ok: false, error: "The uploaded image path does not belong to this manual slot." };
+    }
+
+    const downloaded = await client.storage.from("article-work").download(path);
+    if (downloaded.error) {
+      return {
+        ok: false,
+        error: "The uploaded image could not be read back from private Storage.",
+      };
+    }
+    let inspected: InspectedImage;
+    try {
+      inspected = await inspectImageFile(downloaded.data);
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Unreadable image." };
+    }
+    if (!path.endsWith(`.${inspected.extension}`)) {
+      return { ok: false, error: "The uploaded file extension does not match its image bytes." };
     }
 
     const { data, error } = await client.rpc("admin_import_manual_image", {

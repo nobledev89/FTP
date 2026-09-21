@@ -67,6 +67,9 @@ never appear in `NEXT_PUBLIC_*` variables, browser bundles, prompts, logs, or da
    modes execute immediately; manual mode records an action-required state and releases the lease.
 4. Normalized output passes the stage's Zod schema and is stored as a new immutable artifact version
    (`research_packets`, `drafts`, `audits`, `images`) together with a `provider_runs` row.
+   Manual image bytes take a narrow side path: an authorized Server Action issues a signed token for
+   the current job/run/slot, the browser uploads directly to private Storage, and another authorized
+   action reads the object back and derives its byte metadata before the import RPC accepts it.
 5. Each transition goes through the database transition function, which checks the expected status and
    `lock_version`, and appends a `job_events` row in the same transaction.
 6. After an `APPROVED` audit, the publishing service (never a provider) executes
@@ -130,7 +133,7 @@ either, because a layout does not control whether nested segments render. Each p
 | `NEXT_PUBLIC_SITE_URL`                     | yes          | —           | Canonical public origin                  |
 | `NEXT_PUBLIC_SUPABASE_URL`                 | yes          | —           | Browser-safe                             |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`     | yes          | —           | Browser-safe                             |
-| `SUPABASE_URL`                             | yes          | yes         | Server-side                              |
+| `SUPABASE_URL`                             | —            | yes         | Worker connection (same hosted project)  |
 | `REVALIDATION_SECRET`                      | yes          | yes         | Shared secret for signed revalidation    |
 | `SUPABASE_SERVICE_ROLE_KEY`                | **no**       | yes         | Never on Vercel                          |
 | `WORKER_*`, `PUBLISH_VERIFY_TIMEOUT_MS`    | —            | yes         | Tunables with defaults                   |
@@ -139,4 +142,7 @@ either, because a layout does not control whether nested segments render. Each p
 | `*_API_MODEL`, `GEMINI_IMAGE_MODEL`        | —            | optional    | API model overrides; reviewed defaults   |
 | `API_TIMEOUT_MS`, `API_MAX_RESPONSE_BYTES` | —            | optional    | Bounded API request controls             |
 
-See [.env.example](../.env.example) for the annotated template.
+See [.env.example](../.env.example) and
+[local-worker/.env.example](../local-worker/.env.example) for the separate web and worker
+templates. `pnpm env:check` validates both and proves their shared origins and revalidation secret
+agree without printing credential values.

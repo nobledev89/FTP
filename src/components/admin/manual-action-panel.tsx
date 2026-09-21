@@ -1,14 +1,17 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useActionState, useState } from "react";
 
 import {
   completeManualImagesAction,
+  importUploadedManualImageAction,
   importManualTextAction,
-  uploadManualImageAction,
+  prepareManualImageUploadAction,
 } from "@/lib/admin/manual-actions";
-import { idleActionResult } from "@/lib/admin/action-result";
+import { idleActionResult, type ActionResult } from "@/lib/admin/action-result";
 import type { ManualActionRun } from "@/lib/admin/jobs";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import { Field, FormMessage, controlClass, secondaryButtonClass, textAreaClass } from "./form";
 import { SubmitButton } from "./submit-button";
@@ -214,9 +217,74 @@ function ManualImageSlotForm({
   canEdit: boolean;
   readyVersion: number | null;
 }) {
-  const [state, action] = useActionState(uploadManualImageAction, idleActionResult);
+  const [state, setState] = useState<ActionResult>(idleActionResult);
+  const [pending, setPending] = useState(false);
+  const router = useRouter();
+
+  async function uploadImage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit || pending) return;
+
+    const formData = new FormData(event.currentTarget);
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size < 1) {
+      setState({ ok: false, error: "Choose a non-empty image file." });
+      return;
+    }
+    if (file.size > 10_485_760) {
+      setState({ ok: false, error: "The image is larger than the 10 MB limit." });
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp", "image/avif"].includes(file.type)) {
+      setState({ ok: false, error: "Choose a PNG, JPEG, WebP, or AVIF image." });
+      return;
+    }
+
+    setPending(true);
+    setState(idleActionResult);
+    try {
+      const preparation = new FormData();
+      preparation.set("jobId", run.job_id);
+      preparation.set("runId", run.id);
+      preparation.set("slot", String(brief.slot));
+      preparation.set("mimeType", file.type);
+      preparation.set("byteSize", String(file.size));
+      const prepared = await prepareManualImageUploadAction(preparation);
+      if (!prepared.ok) {
+        setState(prepared);
+        return;
+      }
+
+      const uploaded = await getSupabaseBrowserClient()
+        .storage.from("article-work")
+        .uploadToSignedUrl(prepared.upload.path, prepared.upload.token, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+      if (uploaded.error) {
+        setState({ ok: false, error: `Could not upload the image: ${uploaded.error.message}` });
+        return;
+      }
+
+      // The bytes have already gone directly to Supabase. The small action gets only a path and
+      // metadata, reads the private object back, and derives all file facts from those stored bytes.
+      formData.delete("file");
+      formData.set("privatePath", prepared.upload.path);
+      const imported = await importUploadedManualImageAction(formData);
+      setState(imported);
+      if (imported.ok) router.refresh();
+    } catch (error) {
+      setState({
+        ok: false,
+        error: error instanceof Error ? error.message : "The image upload could not be completed.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <form action={action} className="grid gap-3 rounded-panel border border-border p-3">
+    <form className="grid gap-3 rounded-panel border border-border p-3" onSubmit={uploadImage}>
       <FormMessage state={state} />
       <input name="jobId" type="hidden" value={run.job_id} />
       <input name="runId" type="hidden" value={run.id} />
@@ -313,13 +381,18 @@ function ManualImageSlotForm({
         </Field>
       </div>
       <div className="flex justify-end">
-        <SubmitButton
-          disabled={!canEdit}
-          pendingLabel="Checking and uploading…"
-          variant="secondary"
+        <button
+          aria-disabled={pending || !canEdit ? "true" : undefined}
+          className={secondaryButtonClass}
+          disabled={pending || !canEdit}
+          type="submit"
         >
-          {readyVersion ? "Upload replacement" : "Upload image"}
-        </SubmitButton>
+          {pending
+            ? "Checking and uploading…"
+            : readyVersion
+              ? "Upload replacement"
+              : "Upload image"}
+        </button>
       </div>
     </form>
   );

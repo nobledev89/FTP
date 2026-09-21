@@ -30,6 +30,8 @@ Implementation progress, verification evidence, blockers, and the next action ar
 
 You do not need to install Node 24. pnpm downloads the pinned runtime (`24.21.0`) automatically; see
 [ADR 0005](docs/decisions/0005-project-local-node-runtime.md). Run every tool through `pnpm`.
+For a new Windows PC, follow the complete bootstrap in
+[docs/WINDOWS-SETUP.md](docs/WINDOWS-SETUP.md).
 
 ## Getting started
 
@@ -37,6 +39,7 @@ You do not need to install Node 24. pnpm downloads the pinned runtime (`24.21.0`
 pnpm install
 pnpm supabase:start                  # local Postgres, Auth, and Storage in Docker
 Copy-Item .env.example .env.local    # then fill in values from `pnpm exec supabase status`
+pnpm env:check:web
 pnpm dev
 ```
 
@@ -82,6 +85,9 @@ Then sign in at <http://localhost:3000/admin/login>. See
 | `pnpm db:types`                     | Regenerate database types for the web app and worker                  |
 | `pnpm prompts:seed`                 | Regenerate the SQL seed from the reviewed Markdown prompts            |
 | `pnpm contracts:sync`               | Sync artifact schemas from the web app into the worker package        |
+| `pnpm env:check`                    | Validate web + worker files and their shared deployment values        |
+| `pnpm env:check:web` / `:worker`    | Validate only one local environment file                              |
+| `pnpm env:check:examples`           | Prove the committed templates match the runtime contracts             |
 | `pnpm format` / `pnpm format:check` | Prettier                                                              |
 
 Worker setup and operational behaviour are documented in
@@ -105,6 +111,8 @@ has the corresponding key; see [docs/PROVIDERS.md](docs/PROVIDERS.md).
 - [Providers](docs/PROVIDERS.md)
 - [Public publication](docs/PUBLICATION.md)
 - [Hermes and Windows scheduling](docs/HERMES.md)
+- [Windows operator setup](docs/WINDOWS-SETUP.md)
+- [Deployment and release runbook](docs/DEPLOYMENT.md)
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)

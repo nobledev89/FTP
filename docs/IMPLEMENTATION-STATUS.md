@@ -7,13 +7,13 @@ This is the authoritative live record of implementation progress. Update it imme
 | Field                  | Value                                                             |
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
-| Current phase          | Phase 11 — Publishing, scheduling, and verification hardening (`COMPLETE`) |
-| Current task           | Phase 12 ready: operations, documentation, and release QA            |
-| Last updated           | 2026-09-21 07:20, Asia/Singapore                                     |
+| Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
+| Current task           | Commit and push the Phase 12 release candidate                       |
+| Last updated           | 2026-09-21 08:44, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
-| Relevant commit        | Phase 11 work is committed locally and not yet pushed; the last pushed commit is `0804993`. |
-| Active blockers        | Owner design sign-off (Phase 1) remains pending. The admin console has its own review screenshots and does not depend on it. Open before production: manual image uploads above about 4.4 MB exceed Vercel's function request limit (see decisions). |
-| Next action            | Push the Phase 11 commit and confirm GitHub Actions, then start Phase 12 operations, documentation, and release QA. |
+| Relevant commit        | Phase 11 commit `557a63b` is pushed; Phase 12 documentation/environment work is not yet committed. |
+| Active blockers        | Owner design sign-off (Phase 1) remains pending. Preview/production deployment and Cloudflare changes require the owner's hosted accounts. The private GitHub Actions run for `557a63b` could not be inspected because no authenticated browser or GitHub CLI is available in this environment. |
+| Next action            | Commit and push the Phase 12 release candidate, then confirm GitHub Actions. |
 
 ## Status legend
 
@@ -39,9 +39,23 @@ This is the authoritative live record of implementation progress. Update it imme
 |     9 | Subscription CLI providers                         | `COMPLETE`    |     100% | 2026-09-18 | 335 unit tests, 129 integration tests, 61 signed-out/design and 14 authenticated browser checks pass; live Claude Code draft and live Codex research from the production prompts pass the artifact schemas; signed-out and usage-limited CLIs reach an actionable `NEEDS_HUMAN`. |
 |    10 | Optional API adapters                              | `COMPLETE`    |     100% | 2026-09-18 | OpenAI, Anthropic, and Gemini adapters share the production prompts/schemas; 344 unit, 130 integration, 61 signed-out/design, and 15 authenticated browser checks pass, including a switched API stage through `VERIFIED`. |
 |    11 | Publishing, scheduling, and verification hardening | `COMPLETE`    |     100% | 2026-09-21 | 357 unit, 147 integration (passed twice without a reset), 61 signed-out/design, and 15 authenticated browser checks pass; concurrent publish, slug/alias conflicts, DST-repeated schedule instants, missing public image copies, revalidation retry and logging, clamped verification retries, and the provider isolation boundary are all covered; a live signed revalidation and a real hero-image fetch clear end to end. |
-|    12 | Operations, documentation, and release QA          | `NOT_STARTED` |       0% | —         | —                |
+|    12 | Operations, documentation, and release QA          | `IN_PROGRESS` |      80% | —         | Local release QA is clean: frozen install, environment/generated-contract checks, 364 unit, 147 integration, 61 signed-out/design and 15 authenticated browser checks, build, dependency audit, and tracked-secret scan pass. Hosted preview/production and owner sign-off remain. |
 
 ## Active phase checklist
+
+### Phase 12 — Operations, documentation, and release QA
+
+- [x] Separate the web and worker environment templates, validate them through the production
+      schemas, reject misplaced secrets/placeholders, and prove shared origins/secrets agree.
+- [x] Complete the README, clean-Windows bootstrap, Vercel/Supabase/Cloudflare deployment order,
+      production smoke checks, rollback path, CLI sign-in, Hermes, and daemon documentation.
+- [x] Replace the Server Action image-byte upload with a browser-to-private-Storage flow so the
+      documented 10 MB limit works on Vercel, while preserving authorization and byte verification.
+- [x] Run the complete clean database, security, accessibility, responsive, failure-recovery, and
+      browser release-QA matrix and record screenshots/evidence.
+- [ ] Confirm the private GitHub Actions run for Phase 11 and the Phase 12 release candidate.
+- [ ] Obtain owner design sign-off, deploy a preview, then production, and configure the exact
+      Vercel-provided DNS values in Cloudflare.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -260,15 +274,16 @@ This is the authoritative live record of implementation progress. Update it imme
   without one fails permanently at that stage. The seeded writing default stays Claude Code (the
   plan's version 1 default, arriving in Phase 9); until then it is shown as unavailable and new jobs
   must choose a writing mode explicitly, which the create action re-checks on the server.
-- **Decision: the admin proxy buffers up to 11 MB.** Next.js buffers proxied request bodies to 10 MB
-  by default and silently drops the rest, which would corrupt the largest uploads the 11 MB Server
-  Action limit admits. `experimental.proxyClientMaxBodySize` now matches it.
-- **Open item for production: Vercel caps function request bodies at 4.5 MB.** Manual images are
-  uploaded through a Server Action, so on Vercel a file above about 4.4 MB will be refused before the
-  application sees it, even though the console, Storage, and database accept 10 MB. Recommended fix
-  before production (Phase 11 or 12): upload from the browser straight to `article-work` under the
-  existing editor Storage policy, then have the Server Action verify the stored object's bytes before
-  calling `admin_import_manual_image`. Local and CI runs are unaffected.
+- **Superseded in Phase 12: the admin proxy buffered up to 11 MB.** That matched the old 11 MB image
+  Server Action, but Vercel caps function requests below the application's 10 MB image contract.
+  Images no longer enter Next.js request bodies, so the proxy override is removed and Server Actions
+  are capped at 2 MB for the one-million-character manual JSON input.
+- **Resolved in Phase 12: manual images bypass Vercel's 4.5 MB request limit.** After an authorized
+  preflight, the browser uploads to a signed, immutable private Storage path constrained to the live
+  manual job/run/slot. The finalize action downloads and inspects the object and supplies only
+  derived type, dimensions, size, and hash to `admin_import_manual_image`, which checks Storage
+  metadata again. A 5,000,068-byte browser fixture completes the full manual pipeline to `VERIFIED`
+  while every Next Server Action request stays below 1 MB.
 - **Decision: subscription CLIs run with no shell and an allowlisted environment (ADR 0007).** npm
   installs both CLIs as `.cmd` shims; the worker resolves a shim to its real target (Claude Code's
   `claude.exe`, Codex's `codex.js` under the worker's Node) and never passes arguments through
@@ -309,6 +324,145 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Phase 12 local release QA complete
+
+Date/time: 2026-09-21 08:44, Asia/Singapore
+
+Phase/task: Phase 12 — clean release-candidate verification
+
+Status change: Phase 12 remains `IN_PROGRESS`, progress 55% -> 80%. Local release QA is complete;
+hosted CI confirmation, owner design sign-off, preview/production deployment, and Cloudflare DNS
+remain open.
+
+What changed: Ran the complete documented preflight from the current tree. The tracked-secret scan
+found two credential-shaped but synthetic Anthropic/Google strings in a redaction unit test; those
+fixtures are now assembled at runtime, preserving the redaction check without leaving token-shaped
+source text that can trip push protection. No product logic changed in this final QA step.
+
+Files/migrations affected: `local-worker/src/logging/redact.test.ts`; this status record. The release
+candidate also includes all files listed in the two Phase 12 entries below.
+
+Verification performed: `pnpm install --frozen-lockfile` succeeds from the pinned lockfile.
+`pnpm env:check:examples`, `pnpm prompts:seed --check`, and `pnpm contracts:sync --check` pass.
+`pnpm db:types` regenerates both TypeScript files with no diff. The fresh database evidence from the
+direct-upload task applies all 15 migrations and both seeds; `pnpm db:lint` is clean.
+`pnpm test:integration` passes 147 tests again without a reset after the authenticated browser runs,
+covering RLS/access matrices, concurrent claims, lease expiry/recovery, stage failure branches,
+manual/API/mock pipelines, publishing races, signed revalidation, and live verification.
+`pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test` (364 tests in 43 files), and
+`pnpm build` pass. `pnpm audit --prod --audit-level high` reports no known vulnerabilities. The final
+tracked-file scan finds no provider- or Supabase-secret-shaped values. `pnpm test:e2e` passes 61
+checks (15 authenticated checks correctly skipped without credentials): signed-out authorization,
+same-origin actions, no data leakage, labelled login, noindex, mobile fit, all public/admin review
+screens at 375/768/1024/1440 px, keyboard menu containment, reduced motion, and the 404. The separate
+`pnpm test:e2e:admin` run passes 15 checks against local Supabase, including the 5 MB direct upload,
+full manual pipeline, live publication, real revalidation, real hero fetch, access boundaries,
+optimistic-lock race, metered confirmation, sign-out, and 375/1440 px overflow checks. Screenshots
+are in `test-results/`.
+
+Result: Passed locally. The tree meets the local Phase 12 release-candidate gate with no known
+production dependency vulnerability or credential-shaped tracked value. External deployment and
+human design approval are not claimed.
+
+Commit/PR: not yet committed.
+
+Next action: Commit and push the Phase 12 release candidate, then confirm GitHub Actions.
+
+### 2026-09-21 — Phase 12 direct manual-image uploads
+
+Date/time: 2026-09-21 08:38, Asia/Singapore
+
+Phase/task: Phase 12 — remove the Vercel manual-image request-size blocker
+
+Status change: Phase 12 remains `IN_PROGRESS`, progress 30% -> 55%. The production request-size
+blocker is resolved; the current task moves to the clean release-QA matrix.
+
+What changed: Replaced the image-bearing Server Action with a two-action, direct-Storage protocol.
+The preflight re-authorizes editor access, proves the job is waiting on that manual Gemini run and
+slot, generates an immutable UUID path, and returns Supabase's short-lived path-scoped upload token.
+The browser uploads the file directly to `article-work`, then sends only the path and editorial
+metadata to the finalize action. Finalization re-authorizes and re-reads the run, constrains the path,
+downloads the private object, identifies PNG/JPEG/WebP/AVIF from magic bytes, derives dimensions,
+size and SHA-256, checks the extension, and calls the existing atomic import RPC. The database RPC
+still verifies Storage's size/MIME metadata. A new Storage policy allows editor inserts only when the
+path names the exact live `manual_gemini` job/run/requested slot; generic existing-job paths, stale
+runs, unrequested slots, viewers, outsiders, overwrites, and deletes are refused. Reduced the Server
+Action body cap from 11 MB to 2 MB and removed the proxy buffer override. Updated the console,
+architecture, Supabase, and deployment docs.
+
+Files/migrations affected: new
+`supabase/migrations/20260921110000_direct_manual_image_uploads.sql`; `next.config.ts`;
+`src/lib/admin/manual-actions.ts`, `action-result.ts`, `image-file.ts`, new `image-file.test.ts`;
+new `src/lib/supabase/browser.ts`; `src/components/admin/manual-action-panel.tsx`;
+`tests/integration/storage.test.ts`, `schema.test.ts`, `mock-pipeline.test.ts`;
+`tests/e2e/admin-session.spec.ts`; `docs/ADMIN-CONSOLE.md`, `ARCHITECTURE.md`, `SUPABASE.md`, and
+`DEPLOYMENT.md`.
+
+Verification performed: A fresh `pnpm supabase:reset` applied all 15 migrations and both seeds.
+`pnpm db:lint` reports no schema errors. `pnpm test:integration` passes 147 tests after updating the
+exact private-helper grant snapshot; the first run had 146 behavioural passes and only that stale
+snapshot failure. `pnpm test` passes 364 tests in 43 files, including byte-derived metadata, disguised
+non-image rejection, and pre-read size rejection. `pnpm lint`, `pnpm typecheck`, and
+`git diff --check` pass. `pnpm test:e2e:admin` passes all 15 checks: the manual workflow uploads a
+5,000,068-byte PNG directly to the local Supabase Storage endpoint, records the server-inspected byte
+size, keeps all Next action requests below 1 MB, publishes the copy, fetches it live, and reaches
+`VERIFIED`. An initial evidence assertion expected Playwright to expose multipart bytes through
+`postDataBuffer()` (it reports zero for that request); the product flow succeeded, and the final test
+uses direct request destination + stored server-derived size + bounded action requests instead.
+
+Result: Passed. The documented 10 MB image contract no longer depends on Vercel's function request
+limit, and direct upload authority is narrower than the prior editor Storage policy.
+
+Commit/PR: not yet committed.
+
+Next action: Run the complete clean database, security, accessibility, responsive,
+failure-recovery, and browser release-QA matrix.
+
+### 2026-09-21 — Phase 12 environment and operations baseline
+
+Date/time: 2026-09-21 08:22, Asia/Singapore
+
+Phase/task: Phase 12 — clean-environment contracts and operator/release documentation
+
+Status change: Phase 12 `NOT_STARTED` -> `IN_PROGRESS` (30%). Phase 11 commit `557a63b` was pushed to
+`origin/main`; its private GitHub Actions result remains unconfirmed because this environment has no
+GitHub CLI or available authenticated browser.
+
+What changed: Split the mixed `.env.example` into a web-only root template and a worker-only
+`local-worker/.env.example`. Added `pnpm env:check`, `env:check:web`, `env:check:worker`, and
+`env:check:examples`: the validator reuses the web and worker production schemas, rejects worker/API
+secrets in the Vercel file, rejects unfilled placeholders, checks minimum secret length and bounded
+worker timing rules, and proves the two processes point at the same Supabase/site origins and share
+the exact revalidation secret without printing values. Added four validator tests and made the safe
+example-contract check a CI step. Added a clean Windows setup guide and a deployment runbook covering
+release preflight, hosted Supabase, Vercel preview/production, exact-value environment configuration,
+Cloudflare DNS-only validation, production smoke tests, worker activation, rollback, and credential
+rotation. Reconciled README, architecture, Supabase, worker, and Hermes docs with the new contracts;
+removed the unused web `SUPABASE_URL` from the documented Vercel surface.
+
+Files/migrations affected: `.env.example`, new `local-worker/.env.example`, `.gitignore`, new
+`scripts/validate-env.mts` and `validate-env.test.mts`, `package.json`, `tsconfig.json`,
+`vitest.config.mts`, `.github/workflows/ci.yml`, new `docs/WINDOWS-SETUP.md` and
+`docs/DEPLOYMENT.md`, plus `README.md`, `docs/ARCHITECTURE.md`, `SUPABASE.md`, `LOCAL-WORKER.md`, and
+`HERMES.md`. No migration.
+
+Verification performed: Read the installed Next.js 16.3.5 deployment, environment-variable,
+production, and TypeScript guides before changing the contracts. `pnpm env:check:examples` passes.
+`pnpm format:check` and `pnpm lint` pass. `pnpm typecheck` passes for the web and worker. `pnpm test`
+passes 361 tests in 42 files (four new environment/deployment tests). `pnpm build` completes the
+production build. `git diff --check` passes. The first build correctly exposed explicit `.ts` import
+extensions missing from the root compiler options; enabling `allowImportingTsExtensions` aligned the
+Node 24 script with the no-emit typecheck, after which both typecheck and build passed.
+
+Result: Passed locally. A clean operator now has separate least-privilege templates, can validate
+both processes before startup, and has one ordered path from checkout through DNS and worker release.
+Hosted deployment and full release QA remain open.
+
+Commit/PR: not yet committed. Phase 11 commit `557a63b` pushed successfully to `origin/main`.
+
+Next action: Replace Server Action image-byte uploads with an authorized direct-to-Storage flow that
+retains server-side object verification and works up to the documented 10 MB limit on Vercel.
 
 ### 2026-09-21 — Phase 11 complete
 

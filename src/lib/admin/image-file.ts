@@ -16,6 +16,8 @@ export type InspectedImage = Readonly<{
   extension: "png" | "jpg" | "webp" | "avif";
 }>;
 
+type ReadableImage = Pick<Blob, "size" | "arrayBuffer">;
+
 function uint16be(bytes: Uint8Array, offset: number): number {
   return bytes[offset]! * 256 + bytes[offset + 1]!;
 }
@@ -131,7 +133,7 @@ function dimensions(bytes: Uint8Array): Readonly<{
   return null;
 }
 
-export async function inspectImageFile(file: File): Promise<InspectedImage> {
+export async function inspectImageFile(file: ReadableImage): Promise<InspectedImage> {
   if (file.size < 1) throw new Error("Choose a non-empty image file.");
   if (file.size > MAX_IMAGE_BYTES) throw new Error("The image is larger than the 10 MB limit.");
   const bytes = new Uint8Array(await file.arrayBuffer());

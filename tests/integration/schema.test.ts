@@ -105,7 +105,7 @@ describe("migrations", () => {
       { role: "authenticated", name: "admin_role" },
       { role: "authenticated", name: "can_edit" },
       { role: "authenticated", name: "is_admin" },
-      { role: "authenticated", name: "is_work_object_path" },
+      { role: "authenticated", name: "is_manual_image_upload_path" },
       { role: "service_role", name: "is_active_status" },
       { role: "service_role", name: "is_api_mode" },
       { role: "service_role", name: "is_pausable_status" },

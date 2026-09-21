@@ -5,12 +5,14 @@ import { redactText, redactValue, safeSummary } from "./redact.js";
 
 describe("worker log redaction", () => {
   it("redacts credentials, identity, and personal paths in free text", () => {
-    const input =
-      "Bearer abc.def.ghi sk-ant-api03-secret AIza123456789012345678901234 at C:\\Users\\Dana\\worker and dana@example.com https://me:pass@example.com/x";
+    // Compose key-shaped fixtures so repository scanners do not mistake test text for credentials.
+    const anthropicKey = ["sk", "ant", "api03", "secret"].join("-");
+    const googleKey = ["AI", "za", "123456789012345678901234"].join("");
+    const input = `Bearer abc.def.ghi ${anthropicKey} ${googleKey} at C:\\Users\\Dana\\worker and dana@example.com https://me:pass@example.com/x`;
     const output = redactText(input);
     expect(output).not.toContain("abc.def.ghi");
-    expect(output).not.toContain("sk-ant-api03-secret");
-    expect(output).not.toContain("AIza123456789012345678901234");
+    expect(output).not.toContain(anthropicKey);
+    expect(output).not.toContain(googleKey);
     expect(output).not.toContain("Dana");
     expect(output).not.toContain("dana@example.com");
     expect(output).not.toContain("me:pass");
