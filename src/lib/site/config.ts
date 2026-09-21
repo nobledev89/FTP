@@ -18,6 +18,7 @@ export const siteConfig = {
   description:
     "News, analysis, and explainers on UK banking, payments, lending, investing, insurance, and regulation.",
   positioning: "Clear reporting on the money systems that shape UK households and businesses.",
+  coverage: ["Banking", "Payments", "Lending", "Investing", "Insurance", "Regulation"],
   locale: "en-GB",
   language: "en",
   timeZone: "Europe/London",

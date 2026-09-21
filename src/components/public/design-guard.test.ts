@@ -125,6 +125,8 @@ describe("public design guard", () => {
       ["subtle", "paper", 4.5],
       ["muted", "wash", 4.5],
       ["ink", "wash", 4.5],
+      ["signal", "paper", 4.5],
+      ["white", "signal", 4.5],
       ["dark-copy", "dark-surface", 4.5],
       ["dark-subtle", "dark-surface", 4.5],
       ["white", "dark-surface", 4.5],

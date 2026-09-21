@@ -48,20 +48,20 @@ All three load through `next/font/google` with `display: swap` and self-hosting.
 
 Tailwind sizes are listed for implementers; pixel values are the contract.
 
-| Element         | Mobile                   | Larger screens                         | Weight / leading / tracking                   |
-| --------------- | ------------------------ | -------------------------------------- | --------------------------------------------- |
-| Masthead        | 14vw, 40–60px (D13)      | 72px `sm:text-7xl`, 96px `lg:text-8xl` | serif 600, `leading-[1.05]`, `tracking-tight` |
-| Page/article H1 | 48px `text-5xl`          | 60px `sm:text-6xl`                     | serif 600, `leading-tight`, `tracking-tight`  |
-| Section H2      | 36px `text-4xl`          | 48px `sm:text-5xl`                     | serif 600, `leading-none` to `leading-[1.1]`  |
-| Article H2      | 30px `text-3xl`          | 36px `sm:text-4xl`                     | serif 600, `leading-tight`                    |
-| Article H3      | 24px `text-2xl`          | 24px                                   | serif 600, `leading-snug`                     |
-| Featured title  | 36px `text-4xl`          | 48px `sm:text-5xl`                     | serif 600                                     |
-| Card title      | 24px `text-2xl`          | 24px                                   | serif 600, `leading-snug`                     |
-| Stream title    | 20px `text-xl`           | 20px                                   | serif 400, `leading-snug`                     |
-| Body/prose      | 18px `text-lg`           | 18px                                   | sans 400, 32px `leading-8`                    |
-| Supporting copy | 14–16px `text-sm`/`base` | 14–16px                                | `leading-6` to `leading-7`                    |
-| Eyebrow         | 11px `text-[11px]`       | 11px                                   | uppercase, `tracking-[0.24em]`                |
-| Metadata        | 10–11px                  | 10–11px                                | uppercase, `tracking-[0.18em]`                |
+| Element         | Mobile                   | Larger screens                      | Weight / leading / tracking                   |
+| --------------- | ------------------------ | ----------------------------------- | --------------------------------------------- |
+| Masthead        | 14vw, 44–72px (D13)      | 96px `sm:text-8xl`, 92px at desktop | serif 600, `leading-[0.95]`, `tracking-tight` |
+| Page/article H1 | 48px `text-5xl`          | 60px `sm:text-6xl`                  | serif 600, `leading-tight`, `tracking-tight`  |
+| Section H2      | 36px `text-4xl`          | 48px `sm:text-5xl`                  | serif 600, `leading-none` to `leading-[1.1]`  |
+| Article H2      | 30px `text-3xl`          | 36px `sm:text-4xl`                  | serif 600, `leading-tight`                    |
+| Article H3      | 24px `text-2xl`          | 24px                                | serif 600, `leading-snug`                     |
+| Featured title  | 36px `text-4xl`          | 48px `sm:text-5xl`                  | serif 600                                     |
+| Card title      | 24px `text-2xl`          | 24px                                | serif 600, `leading-snug`                     |
+| Stream title    | 20px `text-xl`           | 20px                                | serif 400, `leading-snug`                     |
+| Body/prose      | 18px `text-lg`           | 18px                                | sans 400, 32px `leading-8`                    |
+| Supporting copy | 14–16px `text-sm`/`base` | 14–16px                             | `leading-6` to `leading-7`                    |
+| Eyebrow         | 11px `text-[11px]`       | 11px                                | uppercase, `tracking-[0.24em]`                |
+| Metadata        | 10–11px                  | 10–11px                             | uppercase, `tracking-[0.18em]`                |
 
 Rules:
 
@@ -108,6 +108,8 @@ The public stylesheet removes Tailwind's default palette. Only these colours exi
 | `line`         | `#d6d3d1` | Primary 1px separators, image rings                     |
 | `line-soft`    | `#e7e5e4` | Secondary separators, header border                     |
 | `wash`         | `#f5f5f4` | Image placeholders, inline code, quiet panels           |
+| `signal`       | `#2737a8` | Brand wordmark, editorial labels, short accent rules    |
+| `signal-soft`  | `#eef1ff` | Reserved pale brand surface                             |
 | `dark-surface` | `#0c0a09` | Intentional dark editorial sections, mobile menu        |
 | `dark-line`    | `#44403c` | Separators on dark surfaces                             |
 | `dark-copy`    | `#d6d3d1` | Body copy on dark surfaces                              |
@@ -123,6 +125,8 @@ The public stylesheet removes Tailwind's default palette. Only these colours exi
 | `subtle` on `paper`             | 4.80:1  | All text, including 10–11px |
 | `subtle` on `wash`              | 4.40:1  | **Not allowed** for text    |
 | `muted` on `wash`               | 6.99:1  | All text                    |
+| `signal` on `paper`             | 9.55:1  | All text and brand details  |
+| `white` on `signal`             | 9.55:1  | All text                    |
 | `dark-copy` on `dark-surface`   | 13.26:1 | All text                    |
 | `dark-subtle` on `dark-surface` | 7.83:1  | All text                    |
 | `line` on `paper`               | 1.49:1  | Decorative separators only  |
@@ -131,8 +135,8 @@ The public stylesheet removes Tailwind's default palette. Only these colours exi
 
 ### 4.3 Rules
 
-- Colour does not create hierarchy; type size, weight, and space do. Colour is reserved for category
-  identity or status, introduced as tokens in Phase 7 when real categories exist.
+- Type size, weight, space, and the grid create hierarchy. `signal` is a restrained brand accent for
+  the wordmark, section flags, and short rules; it does not replace structural hierarchy.
 - Borders are 1px. Prefer top and bottom separators to boxed cards.
 - No gradients, glass panels (backdrop blur), glow, or drop shadows. The public stylesheet removes the
   shadow and blur scales, and the design guard test rejects gradient, shadow, and blur utilities.
@@ -232,11 +236,12 @@ margin.
 
 `/` (home):
 
-1. Masthead: a mono dateline row (London date, "UK finance and fintech"), the "FinTechPulse" wordmark,
-   and a one-line serif positioning statement.
-2. One featured story: a 7/5 split with a 4:5 image on the right (image first on mobile).
-3. The latest stream on a dark section: an intro column (4/12) and a numbered list (8/12).
-4. Optional topic sections, only for categories with real published content.
+1. Masthead: a mono dateline row, oversized two-colour wordmark, positioning statement, and a compact
+   coverage rail.
+2. Front-page lead: one dominant 3:2 story and up to two supporting image stories in an 8/4 news grid.
+3. Latest desk: up to four numbered dispatches in a high-contrast two-column section.
+4. More from the desk: up to three remaining stories in a responsive card row, shown only when real
+   published content is available.
 5. Footer.
 
 With no published articles, the home page shows the masthead and a single restrained empty state. It
@@ -322,18 +327,19 @@ Manual review checklist, at 375 / 768 / 1024 / 1440px:
 
 ## 12. Deviations from Paperframe
 
-| ID  | Paperframe (`c4a9042`)                                    | FinTechPulse                                                        | Reason                                                                                                                   |
-| --- | --------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| D1  | Header `bg-white/90 backdrop-blur-md`                     | `paper` at 95% opacity, no blur                                     | Plan 6.3 prohibits glass panels; plan 6.5 asks for mostly opaque                                                         |
-| D2  | Dark stream metadata `text-stone-500` (4.12:1)            | `dark-subtle` `#a8a29e` (7.83:1)                                    | 10–11px text must meet 4.5:1                                                                                             |
-| D3  | Mobile menu hides with opacity only; links stay focusable | `inert` when closed, Escape, focus management, scroll lock          | Keyboard and screen-reader access (plan 6.5)                                                                             |
-| D4  | Section padding `py-20` at all sizes                      | `py-14 sm:py-16 lg:py-20`                                           | Plan 6.2 reduces small-screen padding to 56–64px                                                                         |
-| D5  | Stream rows use a 2/3/7 column grid at every width        | Number and date stack above the title below 640px                   | Titles were about 200px wide at 375px                                                                                    |
-| D6  | Nav links have no minimum hit area                        | 40px minimum target height                                          | Plan 6.5 hit-area requirement                                                                                            |
-| D7  | MDX component map via `next-mdx-remote`                   | Markdown component allowlist, raw HTML disabled                     | ADR 0001                                                                                                                 |
-| D8  | Tailwind default palette (`stone-*`)                      | Default palette removed; semantic tokens with the plan's hex values | Enforces restrained colour; Tailwind 4 `stone` values are OKLCH approximations                                           |
-| D9  | Bilingual `en`/`zh`, locale transitions                   | Single `en-GB` locale, no locale animation                          | UK-first publication (plan 2.1)                                                                                          |
-| D10 | Global `not-found.tsx` inside one root layout             | `global-not-found.tsx` plus per-group `not-found.tsx`               | Separate public and admin root layouts (ADR 0004)                                                                        |
-| D11 | Dates `MM/DD/YYYY` (en-US) or `YYYY/MM/DD` (zh-CN)        | `17 Sept 2026` / `17 September 2026`, Europe/London                 | UK-readable day-month-year (plan 2.1)                                                                                    |
-| D12 | No skip link                                              | "Skip to content" link                                              | Keyboard access                                                                                                          |
-| D13 | Masthead fixed at 60px on mobile (`text-6xl`)             | `clamp(2.5rem, 14vw, 3.75rem)` below 640px, 60px maximum            | "FinTechPulse" measures 382px at 60px, wider than the 343px column at 375px; Playwright caught 23px of horizontal scroll |
+| ID  | Paperframe (`c4a9042`)                                    | FinTechPulse                                                        | Reason                                                                                                                 |
+| --- | --------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| D1  | Header `bg-white/90 backdrop-blur-md`                     | `paper` at 95% opacity, no blur                                     | Plan 6.3 prohibits glass panels; plan 6.5 asks for mostly opaque                                                       |
+| D2  | Dark stream metadata `text-stone-500` (4.12:1)            | `dark-subtle` `#a8a29e` (7.83:1)                                    | 10–11px text must meet 4.5:1                                                                                           |
+| D3  | Mobile menu hides with opacity only; links stay focusable | `inert` when closed, Escape, focus management, scroll lock          | Keyboard and screen-reader access (plan 6.5)                                                                           |
+| D4  | Section padding `py-20` at all sizes                      | `py-14 sm:py-16 lg:py-20`                                           | Plan 6.2 reduces small-screen padding to 56–64px                                                                       |
+| D5  | Stream rows use a 2/3/7 column grid at every width        | Number and date stack above the title below 640px                   | Titles were about 200px wide at 375px                                                                                  |
+| D6  | Nav links have no minimum hit area                        | 40px minimum target height                                          | Plan 6.5 hit-area requirement                                                                                          |
+| D7  | MDX component map via `next-mdx-remote`                   | Markdown component allowlist, raw HTML disabled                     | ADR 0001                                                                                                               |
+| D8  | Tailwind default palette (`stone-*`)                      | Default palette removed; semantic tokens with the plan's hex values | Enforces restrained colour; Tailwind 4 `stone` values are OKLCH approximations                                         |
+| D9  | Bilingual `en`/`zh`, locale transitions                   | Single `en-GB` locale, no locale animation                          | UK-first publication (plan 2.1)                                                                                        |
+| D10 | Global `not-found.tsx` inside one root layout             | `global-not-found.tsx` plus per-group `not-found.tsx`               | Separate public and admin root layouts (ADR 0004)                                                                      |
+| D11 | Dates `MM/DD/YYYY` (en-US) or `YYYY/MM/DD` (zh-CN)        | `17 Sept 2026` / `17 September 2026`, Europe/London                 | UK-readable day-month-year (plan 2.1)                                                                                  |
+| D12 | No skip link                                              | "Skip to content" link                                              | Keyboard access                                                                                                        |
+| D13 | Masthead fixed at 60px on mobile (`text-6xl`)             | `clamp(2.75rem, 14vw, 4.5rem)` below 640px                          | The fluid size keeps the wordmark inside the 343px column at 375px while permitting stronger hierarchy on wider phones |
+| D14 | Monochrome brand and one featured 7/5 story               | Blue-violet brand signal and an 8/4 multi-story front-page grid     | A denser modern-newspaper hierarchy makes the homepage more scannable while keeping the restrained editorial system    |
