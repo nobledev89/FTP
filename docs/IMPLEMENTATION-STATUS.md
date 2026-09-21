@@ -13,7 +13,7 @@ This is the authoritative live record of implementation progress. Update it imme
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
 | Active blockers        | Production database writes must be run by the owner (auto mode refuses them). |
-| Next action            | Owner runs `supabase db push --include-seed` (six migrations plus seeds); then push `main`, set discovery targets, and run the worker continuously. |
+| Next action            | Owner runs `supabase db push --include-seed` (five migrations plus seeds); then push `main`, set discovery targets, and run the worker continuously. |
 
 ## Status legend
 
