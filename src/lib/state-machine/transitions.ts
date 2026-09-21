@@ -5,7 +5,15 @@ type Enums = Database["public"]["Enums"];
 export type JobStatus = Enums["job_status"];
 export type PipelineStage = Enums["pipeline_stage"];
 export type TransitionPath =
-  "normal" | "pause" | "resume" | "failure" | "escalate" | "resolve" | "retry" | "recovery";
+  | "normal"
+  | "pause"
+  | "resume"
+  | "failure"
+  | "escalate"
+  | "resolve"
+  | "retry"
+  | "recovery"
+  | "discard";
 
 export type JobTransition = Readonly<{
   from: JobStatus;
@@ -36,6 +44,7 @@ export const JOB_STATUSES = [
   "PAUSED",
   "FAILED",
   "NEEDS_HUMAN",
+  "DISCARDED",
 ] as const satisfies readonly JobStatus[];
 
 export const PIPELINE_STAGES = [
@@ -133,6 +142,17 @@ const RECOVERY_TRANSITIONS = [
   ["PUBLISHING", "APPROVED"],
 ] as const satisfies readonly (readonly [JobStatus, JobStatus])[];
 
+/**
+ * Everything before publication can be turned down. Mirrors 20260921140100_discard_job.sql; the
+ * database additionally refuses a job whose stage is running under a live lease.
+ */
+export const DISCARDABLE_STATUSES = [
+  ...PAUSABLE_STATUSES,
+  "PAUSED",
+  "FAILED",
+  "NEEDS_HUMAN",
+] as const satisfies readonly JobStatus[];
+
 function transitionKey(from: JobStatus, to: JobStatus): string {
   return `${from}>${to}`;
 }
@@ -160,6 +180,7 @@ function buildTransitions(): readonly JobTransition[] {
   }
   for (const status of RESOLUTION_DESTINATIONS) add("NEEDS_HUMAN", status, "resolve");
   for (const [from, to] of RECOVERY_TRANSITIONS) add(from, to, "recovery");
+  for (const status of DISCARDABLE_STATUSES) add(status, "DISCARDED", "discard");
 
   return Object.freeze([...rows.values()]);
 }

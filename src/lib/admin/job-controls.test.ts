@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { planAdminTransition } from "@/lib/state-machine/admin-rules";
-import { JOB_STATUSES, type JobStatus } from "@/lib/state-machine/transitions";
+import { JOB_STATUSES, canTransition, type JobStatus } from "@/lib/state-machine/transitions";
 
 import { availableControls, resolutionDestinations, type JobControlSnapshot } from "./job-controls";
 
@@ -20,28 +20,40 @@ function snapshot(overrides: Partial<JobControlSnapshot> = {}): JobControlSnapsh
 
 describe("availableControls", () => {
   it("offers only what the status allows", () => {
-    expect(availableControls(snapshot({ status: "IDEA" }))).toEqual(["start", "pause", "escalate"]);
-    expect(availableControls(snapshot({ status: "AUDITING" }))).toEqual(["pause", "escalate"]);
+    expect(availableControls(snapshot({ status: "IDEA" }))).toEqual([
+      "start",
+      "pause",
+      "escalate",
+      "discard",
+    ]);
+    expect(availableControls(snapshot({ status: "AUDITING" }))).toEqual([
+      "pause",
+      "escalate",
+      "discard",
+    ]);
     expect(availableControls(snapshot({ status: "APPROVED" }))).toEqual([
       "schedule",
       "pause",
       "escalate",
+      "discard",
     ]);
     expect(
       availableControls(snapshot({ status: "PAUSED", pausedFromStatus: "DRAFT_PENDING" })),
-    ).toEqual(["resume"]);
+    ).toEqual(["resume", "discard"]);
     expect(availableControls(snapshot({ status: "FAILED", failedStage: "draft" }))).toEqual([
       "retry",
+      "discard",
     ]);
     expect(
       availableControls(snapshot({ status: "NEEDS_HUMAN", needsHumanStage: "audit" })),
-    ).toEqual(["resolve"]);
+    ).toEqual(["resolve", "discard"]);
   });
 
   it("offers nothing once the worker owns the outcome", () => {
     expect(availableControls(snapshot({ status: "PUBLISHING" }))).toEqual([]);
     expect(availableControls(snapshot({ status: "PUBLISHED" }))).toEqual([]);
     expect(availableControls(snapshot({ status: "VERIFIED" }))).toEqual([]);
+    expect(availableControls(snapshot({ status: "DISCARDED" }))).toEqual([]);
   });
 
   it("never offers a control the pure planner would reject", () => {
@@ -53,6 +65,8 @@ describe("availableControls", () => {
       escalate: "mark_needs_human",
       resolve: "resolve",
       schedule: "schedule",
+      // Discarding is `admin_discard_job`, not a planner action; it follows the transition map.
+      discard: null,
     } as const;
 
     for (const status of JOB_STATUSES) {
@@ -67,6 +81,10 @@ describe("availableControls", () => {
 
       for (const control of availableControls(current)) {
         const action = actions[control];
+        if (action === null) {
+          expect(canTransition(status, "DISCARDED"), `${status} / discard`).toBe(true);
+          continue;
+        }
         const toStatus: JobStatus | undefined =
           action === "resolve" ? resolutionDestinations(current)[0] : undefined;
         expect(

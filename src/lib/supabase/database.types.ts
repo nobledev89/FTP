@@ -1482,6 +1482,17 @@ export type Database = {
         }[]
       }
       admin_dashboard: { Args: { p_list_limit?: number }; Returns: Json }
+      admin_discard_job: {
+        Args: {
+          p_expected_lock_version: number
+          p_job_id: string
+          p_reason: string
+        }
+        Returns: {
+          lock_version: number
+          status: Database["public"]["Enums"]["job_status"]
+        }[]
+      }
       admin_import_manual_image: {
         Args: {
           p_byte_size: number
@@ -1757,6 +1768,7 @@ export type Database = {
         | "PAUSED"
         | "FAILED"
         | "NEEDS_HUMAN"
+        | "DISCARDED"
       log_outcome: "succeeded" | "failed" | "skipped"
       pipeline_stage:
         | "research"
@@ -1988,6 +2000,7 @@ export const Constants = {
         "PAUSED",
         "FAILED",
         "NEEDS_HUMAN",
+        "DISCARDED",
       ],
       log_outcome: ["succeeded", "failed", "skipped"],
       pipeline_stage: [

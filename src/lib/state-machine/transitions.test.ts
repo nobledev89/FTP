@@ -25,9 +25,10 @@ describe("job transition map", () => {
       escalate: 16,
       resolve: 7,
       recovery: 8,
+      discard: 19,
     });
-    expect(JOB_TRANSITIONS).toHaveLength(99);
-    expect(new Set(JOB_TRANSITIONS.map(({ from, to }) => `${from}>${to}`)).size).toBe(99);
+    expect(JOB_TRANSITIONS).toHaveLength(118);
+    expect(new Set(JOB_TRANSITIONS.map(({ from, to }) => `${from}>${to}`)).size).toBe(118);
   });
 
   it.each(JOB_TRANSITIONS)("allows $from -> $to via $path", ({ from, to, path }) => {
@@ -52,6 +53,10 @@ describe("job transition map", () => {
     expect(canTransition("APPROVED", "PUBLISHED")).toBe(false);
     expect(canTransition("PUBLISHED", "FAILED")).toBe(false);
     expect(allowedTransitionsFrom("VERIFIED")).toEqual([]);
+    expect(allowedTransitionsFrom("DISCARDED")).toEqual([]);
+    expect(canTransition("APPROVED", "DISCARDED")).toBe(true);
+    expect(canTransition("PUBLISHING", "DISCARDED")).toBe(false);
+    expect(canTransition("PUBLISHED", "DISCARDED")).toBe(false);
     expect(transitionFor("AUDITING", "NEEDS_HUMAN")?.path).toBe("normal");
   });
 });

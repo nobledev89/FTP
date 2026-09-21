@@ -1,5 +1,6 @@
 import {
   allowedTransitionsFrom,
+  canTransition,
   isPausableStatus,
   stageForStatus,
   stageRank,
@@ -24,6 +25,7 @@ export const CONTROL_KINDS = [
   "escalate",
   "resolve",
   "schedule",
+  "discard",
 ] as const;
 
 export type ControlKind = (typeof CONTROL_KINDS)[number];
@@ -47,6 +49,7 @@ export function availableControls(snapshot: JobControlSnapshot): readonly Contro
   if (snapshot.status === "PAUSED" && snapshot.pausedFromStatus) controls.push("resume");
   if (snapshot.status === "FAILED" && snapshot.failedStage) controls.push("retry");
   if (snapshot.status === "NEEDS_HUMAN") controls.push("resolve");
+  if (canTransition(snapshot.status, "DISCARDED")) controls.push("discard");
 
   return controls;
 }
@@ -87,4 +90,5 @@ export const CONTROL_LABELS = {
   escalate: "Mark needs human",
   resolve: "Resolve escalation",
   schedule: "Schedule publication",
+  discard: "Discard article",
 } as const satisfies Record<ControlKind, string>;

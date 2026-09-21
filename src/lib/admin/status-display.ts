@@ -37,6 +37,7 @@ const JOB_STATUS_TONES = {
   PAUSED: "neutral",
   FAILED: "danger",
   NEEDS_HUMAN: "danger",
+  DISCARDED: "neutral",
 } as const satisfies Record<JobStatus, StatusTone>;
 
 const JOB_STATUS_MEANINGS = {
@@ -62,6 +63,7 @@ const JOB_STATUS_MEANINGS = {
   PAUSED: "Held by an admin. Resume returns it to where it stopped.",
   FAILED: "Attempts were exhausted. Retry restarts the failed stage.",
   NEEDS_HUMAN: "Escalated. Resolve it to an explicit destination with a note.",
+  DISCARDED: "Turned down by an editor. It will never be published; its history is kept.",
 } as const satisfies Record<JobStatus, string>;
 
 const STAGE_LABELS = {

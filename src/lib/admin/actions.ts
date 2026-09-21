@@ -452,6 +452,62 @@ export async function withdrawArticleAction(
   }
 }
 
+const discardFormSchema = z.object({
+  jobId: uuidSchema,
+  expectedLockVersion: z.coerce.number().int().nonnegative(),
+  reason: z
+    .string()
+    .transform((value) => value.trim())
+    .pipe(
+      z
+        .string()
+        .min(3, "must be at least 3 characters")
+        .max(500, "must be 500 characters or fewer"),
+    ),
+});
+
+/**
+ * Turns down an unpublished job for good. `admin_discard_job` re-authorizes the editor, checks
+ * `lock_version` and the transition map, refuses a stage running under a live lease, and records
+ * the reason. Nothing public changes: an unpublished job was never on the site.
+ */
+export async function discardJobAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const parsed = discardFormSchema.safeParse({
+      jobId: formData.get("jobId"),
+      expectedLockVersion: formData.get("expectedLockVersion"),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+
+    const client = await createSupabaseServerClient();
+    const { error } = await client.rpc("admin_discard_job", {
+      p_job_id: parsed.data.jobId,
+      p_expected_lock_version: parsed.data.expectedLockVersion,
+      p_reason: parsed.data.reason,
+    });
+    if (error) {
+      if (toWorkflowError(error).code === "LEASE_LOST") {
+        return {
+          ok: false,
+          error: "The worker is running a stage of this job. Pause it first, or try again shortly.",
+        };
+      }
+      throw error;
+    }
+
+    revalidatePath("/admin");
+    revalidatePath(`/admin/articles/${parsed.data.jobId}`);
+    return { ok: true, message: "Discarded. It will not be published." };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Prompt versions
 // ---------------------------------------------------------------------------

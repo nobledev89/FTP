@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 
 import { idleActionResult } from "@/lib/admin/action-result";
-import { jobTransitionAction } from "@/lib/admin/actions";
+import { discardJobAction, jobTransitionAction } from "@/lib/admin/actions";
 import {
   CONTROL_LABELS,
   type ControlKind,
@@ -12,7 +12,14 @@ import {
 import { jobStatusMeaning } from "@/lib/admin/status-display";
 import type { JobStatus } from "@/lib/state-machine/transitions";
 
-import { Field, FormMessage, controlClass, dangerButtonClass, textAreaClass } from "./form";
+import {
+  CheckboxField,
+  Field,
+  FormMessage,
+  controlClass,
+  dangerButtonClass,
+  textAreaClass,
+} from "./form";
 import { SubmitButton } from "./submit-button";
 
 /**
@@ -44,6 +51,7 @@ export function JobControls({
   canEdit,
 }: JobControlsProps) {
   const [state, formAction] = useActionState(jobTransitionAction, idleActionResult);
+  const [discardState, discardAction] = useActionState(discardJobAction, idleActionResult);
 
   if (!canEdit) {
     return (
@@ -198,7 +206,44 @@ export function JobControls({
         </form>
       ) : null}
 
-      {controls.length === 0 ? (
+      {has("discard") ? (
+        <form action={discardAction} className="grid gap-2 border-t border-border pt-4">
+          {hidden}
+          <FormMessage state={discardState} />
+          <Field
+            hint="Recorded on the job timeline. The job is kept but will never be published."
+            htmlFor="discardReason"
+            label="Reason for discarding"
+            required
+          >
+            <textarea
+              aria-describedby="discardReason-hint"
+              className={textAreaClass}
+              id="discardReason"
+              maxLength={500}
+              minLength={3}
+              name="reason"
+              required
+              rows={2}
+            />
+          </Field>
+          <CheckboxField
+            id="discardConfirm"
+            label="I understand a discarded article cannot be restored."
+            name="confirm"
+            required
+          />
+          <div>
+            <SubmitButton pendingLabel="Discarding…" variant="danger">
+              {CONTROL_LABELS.discard}
+            </SubmitButton>
+          </div>
+        </form>
+      ) : null}
+
+      {controls.length === 0 &&
+      snapshot.status !== "VERIFIED" &&
+      snapshot.status !== "DISCARDED" ? (
         <p className="text-sm text-text-muted">
           No admin action applies to this status. The worker moves it on from here.
         </p>
