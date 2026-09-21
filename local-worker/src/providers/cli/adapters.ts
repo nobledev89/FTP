@@ -99,8 +99,8 @@ export type CliAdapterSet = Readonly<{
   revision: StageAdapter<DraftStageInput, DraftOutput>;
   images: StageAdapter<ImageStageInput, ImageStageOutput>;
   audit: StageAdapter<AuditStageInput, AuditOutput>;
-  /** Codex itself, for topic discovery, which is not a pipeline stage. */
-  codex: StructuredCli;
+  /** Codex itself, for the lanes that are not pipeline stages: topic discovery and hero replacement. */
+  codex: CodexCli;
   clis: readonly StructuredCli[];
 }>;
 

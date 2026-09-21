@@ -17,6 +17,7 @@ import { WorkerRunner } from "../queue/runner.js";
 import { buildStatusReport } from "../status/status.js";
 import { VerificationService } from "../verification/verify.js";
 import { SupabaseDiscoveryStore, TopicDiscoveryService } from "../discovery/service.js";
+import { HeroReplacementService, SupabaseHeroReplacementStore } from "../reimage/service.js";
 
 type Command = "once" | "start" | "status";
 
@@ -96,18 +97,14 @@ async function main(): Promise<number> {
       maxResponseBytes: env.API_MAX_RESPONSE_BYTES,
     },
   });
+  const revalidator = new CacheRevalidationClient({
+    publicSiteUrl: env.PUBLIC_SITE_URL,
+    secret: env.REVALIDATION_SECRET,
+    timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
+  });
   const handlers = createPipelineHandlers({
     store: artifacts,
-    publisher: new PublishingService(
-      client,
-      artifacts,
-      new CacheRevalidationClient({
-        publicSiteUrl: env.PUBLIC_SITE_URL,
-        secret: env.REVALIDATION_SECRET,
-        timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
-      }),
-      logger,
-    ),
+    publisher: new PublishingService(client, artifacts, revalidator, logger),
     verifier: new VerificationService(client, {
       publicSiteUrl: env.PUBLIC_SITE_URL,
       timeoutMs: env.PUBLISH_VERIFY_TIMEOUT_MS,
@@ -126,6 +123,24 @@ async function main(): Promise<number> {
       new SupabaseDiscoveryStore(client),
       cli.codex,
       env.WORKER_ID,
+      logger,
+    ),
+    heroReplacements: new HeroReplacementService(
+      new SupabaseHeroReplacementStore(client, env.WORKER_ID, revalidator, logger),
+      env.WORKER_ID,
+      {
+        gemini: {
+          settings: {
+            model: env.GEMINI_IMAGE_MODEL,
+            ...(env.GEMINI_API_KEY ? { apiKey: env.GEMINI_API_KEY } : {}),
+          },
+          runtime: {
+            timeoutMs: env.API_TIMEOUT_MS,
+            maxResponseBytes: env.API_MAX_RESPONSE_BYTES,
+          },
+        },
+        codex: cli.codex,
+      },
       logger,
     ),
   });

@@ -45,7 +45,7 @@ export class GeminiImagesApiAdapter implements StageAdapter<ImageStageInput, Ima
     context: RunContext;
     signal: AbortSignal;
   }): Promise<RawRunResult> {
-    const apiKey = requireApiKey("Gemini", this.settings.apiKey);
+    requireApiKey("Gemini", this.settings.apiKey);
     const slots = imageSlotPrompts(request.input, request.context);
     if (slots.length !== request.context.brief.imageCount) {
       throw new ApiProviderError(
@@ -59,34 +59,14 @@ export class GeminiImagesApiAdapter implements StageAdapter<ImageStageInput, Ima
     const files: StageFile[] = [];
     const perRequest: JsonObject[] = [];
     for (const { brief, prompt } of slots) {
-      const response = await requestJson(
-        {
-          provider: "Gemini",
-          url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.settings.model)}:generateContent`,
-          headers: { "x-goog-api-key": apiKey },
-          body: {
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseModalities: ["IMAGE"],
-              imageConfig: { aspectRatio: brief.aspectRatio },
-            },
-          },
-          signal: request.signal,
-        },
-        this.runtime,
-      );
-      const generated = generatedImage(response);
-      const bytes = Uint8Array.from(Buffer.from(generated.data, "base64"));
-      if (bytes.byteLength === 0 || bytes.byteLength > 10_485_760) {
-        throw new ApiProviderError(
-          "Gemini",
-          "Gemini returned an empty image or one larger than the 10 MiB artifact limit.",
-          "invalid_output",
-        );
-      }
-      const dimensions = imageDimensions(bytes, generated.mimeType);
-      const contentHash = createHash("sha256").update(bytes).digest("hex");
-      files.push({ slot: brief.slot, bytes, mimeType: generated.mimeType, ...dimensions });
+      const drawn = await drawGeminiImage(this.settings, this.runtime, {
+        prompt,
+        aspectRatio: brief.aspectRatio,
+        signal: request.signal,
+      });
+      const { bytes, mimeType, contentHash } = drawn;
+      const dimensions = { width: drawn.width, height: drawn.height };
+      files.push({ slot: brief.slot, bytes, mimeType, ...dimensions });
       artifacts.push(
         imageArtifactSchema.parse({
           slot: brief.slot,
@@ -99,14 +79,14 @@ export class GeminiImagesApiAdapter implements StageAdapter<ImageStageInput, Ima
           focalX: 50,
           focalY: 50,
           ...dimensions,
-          mimeType: generated.mimeType,
+          mimeType,
           byteSize: bytes.byteLength,
           contentHash,
           status: "uploaded",
           privatePath: null,
         }),
       );
-      perRequest.push(geminiUsage(response));
+      perRequest.push(drawn.usage);
     }
 
     return {
@@ -137,6 +117,61 @@ export class GeminiImagesApiAdapter implements StageAdapter<ImageStageInput, Ima
       );
     }
   }
+}
+
+export type DrawnImage = Readonly<{
+  bytes: Uint8Array;
+  mimeType: SupportedImageMime;
+  width: number;
+  height: number;
+  contentHash: string;
+  usage: JsonObject;
+}>;
+
+/**
+ * One prompt in, one image out.
+ *
+ * Shared by the images stage and the hero replacement lane, so a replacement is drawn by exactly
+ * the request the original was drawn by. Callers own what happens to the bytes afterwards.
+ */
+export async function drawGeminiImage(
+  settings: GeminiSettings,
+  runtime: ApiHttpRuntime,
+  request: Readonly<{ prompt: string; aspectRatio: string; signal: AbortSignal }>,
+): Promise<DrawnImage> {
+  const apiKey = requireApiKey("Gemini", settings.apiKey);
+  const response = await requestJson(
+    {
+      provider: "Gemini",
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(settings.model)}:generateContent`,
+      headers: { "x-goog-api-key": apiKey },
+      body: {
+        contents: [{ role: "user", parts: [{ text: request.prompt }] }],
+        generationConfig: {
+          responseModalities: ["IMAGE"],
+          imageConfig: { aspectRatio: request.aspectRatio },
+        },
+      },
+      signal: request.signal,
+    },
+    runtime,
+  );
+  const generated = generatedImage(response);
+  const bytes = Uint8Array.from(Buffer.from(generated.data, "base64"));
+  if (bytes.byteLength === 0 || bytes.byteLength > 10_485_760) {
+    throw new ApiProviderError(
+      "Gemini",
+      "Gemini returned an empty image or one larger than the 10 MiB artifact limit.",
+      "invalid_output",
+    );
+  }
+  return {
+    bytes,
+    mimeType: generated.mimeType,
+    ...imageDimensions(bytes, generated.mimeType),
+    contentHash: createHash("sha256").update(bytes).digest("hex"),
+    usage: geminiUsage(response),
+  };
 }
 
 function generatedImage(response: Record<string, unknown>): {

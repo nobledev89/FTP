@@ -694,6 +694,111 @@ export type Database = {
           },
         ]
       }
+      hero_image_replacements: {
+        Row: {
+          applied_at: string | null
+          article_id: string
+          created_at: string
+          direction: string | null
+          error_summary: string | null
+          finished_at: string | null
+          id: string
+          image_id: string | null
+          job_id: string
+          mode: Database["public"]["Enums"]["hero_replacement_mode"]
+          provider_run_id: string | null
+          requested_at: string
+          requested_by: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          site_id: string
+          started_at: string | null
+          status: Database["public"]["Enums"]["hero_replacement_status"]
+          worker_id: string | null
+        }
+        Insert: {
+          applied_at?: string | null
+          article_id: string
+          created_at?: string
+          direction?: string | null
+          error_summary?: string | null
+          finished_at?: string | null
+          id?: string
+          image_id?: string | null
+          job_id: string
+          mode: Database["public"]["Enums"]["hero_replacement_mode"]
+          provider_run_id?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          site_id: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["hero_replacement_status"]
+          worker_id?: string | null
+        }
+        Update: {
+          applied_at?: string | null
+          article_id?: string
+          created_at?: string
+          direction?: string | null
+          error_summary?: string | null
+          finished_at?: string | null
+          id?: string
+          image_id?: string | null
+          job_id?: string
+          mode?: Database["public"]["Enums"]["hero_replacement_mode"]
+          provider_run_id?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          site_id?: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["hero_replacement_status"]
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hero_image_replacements_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hero_image_replacements_image_id_job_id_fkey"
+            columns: ["image_id", "job_id"]
+            isOneToOne: false
+            referencedRelation: "images"
+            referencedColumns: ["id", "job_id"]
+          },
+          {
+            foreignKeyName: "hero_image_replacements_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "article_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hero_image_replacements_provider_run_id_job_id_fkey"
+            columns: ["provider_run_id", "job_id"]
+            isOneToOne: false
+            referencedRelation: "provider_runs"
+            referencedColumns: ["id", "job_id"]
+          },
+          {
+            foreignKeyName: "hero_image_replacements_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       images: {
         Row: {
           alt_text: string | null
@@ -1591,6 +1696,26 @@ export type Database = {
           version: number
         }[]
       }
+      admin_attach_hero_replacement_image: {
+        Args: {
+          p_byte_size: number
+          p_content_hash: string
+          p_height: number
+          p_metadata: Json
+          p_mime_type: string
+          p_private_path: string
+          p_replacement_id: string
+          p_width: number
+        }
+        Returns: {
+          image_id: string
+          image_version: number
+        }[]
+      }
+      admin_cancel_hero_replacement: {
+        Args: { p_note?: string; p_replacement_id: string }
+        Returns: Database["public"]["Enums"]["hero_replacement_status"]
+      }
       admin_complete_manual_images: {
         Args: { p_job_id: string; p_run_id: string }
         Returns: Database["public"]["Enums"]["job_status"]
@@ -1649,6 +1774,18 @@ export type Database = {
         }[]
       }
       admin_request_discovery_scan: { Args: never; Returns: undefined }
+      admin_request_hero_replacement: {
+        Args: {
+          p_direction?: string
+          p_expected_lock_version: number
+          p_job_id: string
+          p_mode: Database["public"]["Enums"]["hero_replacement_mode"]
+        }
+        Returns: {
+          replacement_id: string
+          status: Database["public"]["Enums"]["hero_replacement_status"]
+        }[]
+      }
       admin_reschedule_job: {
         Args: {
           p_desired_publish_at?: string
@@ -1659,6 +1796,10 @@ export type Database = {
           desired_publish_at: string
           lock_version: number
         }[]
+      }
+      admin_review_hero_replacement: {
+        Args: { p_approve: boolean; p_note?: string; p_replacement_id: string }
+        Returns: Database["public"]["Enums"]["hero_replacement_status"]
       }
       admin_transition_job: {
         Args: {
@@ -1862,6 +2003,18 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["job_status"]
       }
+      worker_apply_hero_replacement: {
+        Args: {
+          p_public_path: string
+          p_replacement_id: string
+          p_worker_id: string
+        }
+        Returns: {
+          article_id: string
+          public_path: string
+          slug: string
+        }[]
+      }
       worker_begin_topic_discovery: {
         Args: { p_worker_id: string }
         Returns: {
@@ -1872,6 +2025,23 @@ export type Database = {
           site_name: string
           timezone: string
           today: string
+        }[]
+      }
+      worker_claim_hero_replacement: {
+        Args: { p_worker_id: string }
+        Returns: {
+          article_id: string
+          direction: string
+          image_id: string
+          image_mime_type: string
+          image_private_path: string
+          images_mode: Database["public"]["Enums"]["provider_mode"]
+          job_id: string
+          mode: Database["public"]["Enums"]["hero_replacement_mode"]
+          replacement_id: string
+          site_id: string
+          slug: string
+          work: string
         }[]
       }
       worker_create_discovered_job: {
@@ -1887,6 +2057,15 @@ export type Database = {
         }
         Returns: string
       }
+      worker_fail_hero_replacement: {
+        Args: {
+          p_error: string
+          p_replacement_id: string
+          p_retry?: boolean
+          p_worker_id: string
+        }
+        Returns: Database["public"]["Enums"]["hero_replacement_status"]
+      }
       worker_finish_topic_discovery: {
         Args: {
           p_candidates?: number
@@ -1897,6 +2076,24 @@ export type Database = {
           p_worker_id: string
         }
         Returns: undefined
+      }
+      worker_record_hero_candidate: {
+        Args: {
+          p_byte_size: number
+          p_content_hash: string
+          p_height: number
+          p_metadata: Json
+          p_mime_type: string
+          p_private_path: string
+          p_provider_run_id?: string
+          p_replacement_id: string
+          p_width: number
+          p_worker_id: string
+        }
+        Returns: {
+          image_id: string
+          image_version: number
+        }[]
       }
       worker_status: { Args: { p_worker_id: string }; Returns: Json }
     }
@@ -1932,6 +2129,17 @@ export type Database = {
         | "permanent_config"
         | "unknown"
       evidence_relation: "supports" | "contradicts" | "context"
+      hero_replacement_mode: "regenerate" | "upload"
+      hero_replacement_status:
+        | "pending"
+        | "drawing"
+        | "awaiting_review"
+        | "approved"
+        | "applying"
+        | "applied"
+        | "rejected"
+        | "cancelled"
+        | "failed"
       image_role: "hero" | "supporting"
       image_status: "briefed" | "uploaded" | "ready" | "published" | "rejected"
       job_status:
@@ -2164,6 +2372,18 @@ export const Constants = {
         "unknown",
       ],
       evidence_relation: ["supports", "contradicts", "context"],
+      hero_replacement_mode: ["regenerate", "upload"],
+      hero_replacement_status: [
+        "pending",
+        "drawing",
+        "awaiting_review",
+        "approved",
+        "applying",
+        "applied",
+        "rejected",
+        "cancelled",
+        "failed",
+      ],
       image_role: ["hero", "supporting"],
       image_status: ["briefed", "uploaded", "ready", "published", "rejected"],
       job_status: [

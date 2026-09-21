@@ -66,8 +66,11 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Rebuild the console around editorial decisions: publish now, rescheduling, a readable draft
       preview, plain-language statuses with a step tracker, a decisions-first dashboard, and opt-in
       auto-publish for discovered articles.
-- [ ] Apply the discovery prompt and editor-desk migrations, set category targets, and take the
-      first discovered article through review to `VERIFIED` on production.
+- [x] Rewrite the image art direction around a screenprinted editorial-illustration house style
+      and add hero image replacement for live articles (migration, worker lane, console panel).
+- [ ] Apply the discovery prompt, editor-desk, illustration-prompt, and hero-replacement migrations,
+      set category targets, and take the first discovered article through review to `VERIFIED` on
+      production.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -336,6 +339,76 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Editorial illustration house style and hero image replacement
+
+Date/time: 2026-09-21 18:05, Asia/Singapore
+
+Phase/task: Phase 12 — owner-reported problem with the look of article images
+
+Status change: Phase 12 remains `IN_PROGRESS`.
+
+What changed: The owner reported that article images were dull enough to keep a reader off the
+site. The cause was the prompt, not the model. `imageSlotPrompts` renders the whole
+`image-brief` template as the image prompt, so every image request carried the 113-line writing
+style guide at `{{styleGuide}}`, a metadata section, and a JSON output schema — none of which an
+image model can use. Gemini is called with `responseModalities: ["IMAGE"]` and cannot return JSON;
+the Codex path appended "Ignore the metadata and output instructions above"; the manual panel
+prefills its form from the brief. The remaining art direction was six prohibitions and three
+instructions asking for near-neutral palettes, one accent at most, and even light. Dull was the
+specification.
+
+- **A house style that names a picture, not a ban list.** `prompts/image-brief.md` is rewritten as
+  a screenprinted editorial illustration in three fixed inks (`#1C1917`, `#A8A29E`, and a
+  `#C2410C` accent on `#F5F5F4`), with coarse halftone, deliberate misregistration, high
+  contrast, and one dominant object. `{{styleGuide}}`, the metadata rules, and the JSON schema are
+  gone, so the subject is most of the prompt instead of a line inside a policy document. Three hard
+  rules remain: no text, no real logos or people, no charts.
+- **Briefs that name objects.** `prompts/draft.md` gains an image-brief section: the drafting model
+  must give the illustrator one concrete scene built from nameable things, with a twist of scale or
+  arrangement carrying the argument, and worked weak/strong examples. "A network of connected nodes"
+  is called out as a failed brief.
+- **Hero image replacement for live articles** (`20260921180100`). The published snapshot carries
+  one image, so this is a single-slot operation that never re-enters the pipeline: the job keeps its
+  `PUBLISHED`/`VERIFIED` status and its approved draft and audit are untouched, exactly as
+  `admin_withdraw_article` acts on the snapshot rather than on the job. `hero_image_replacements`
+  holds the editorial state through `pending → drawing → awaiting_review → approved → applying →
+  applied`, with a partial unique index allowing one open request per job. `guard_article_write`
+  gains a `reimage` context so `worker_apply_hero_replacement` may move `articles.hero_image`
+  and `content_updated_at` and nothing else. Image rows stay append-only: a replacement is a new
+  version of slot 0, and the superseded row keeps its own published path for good.
+- **A worker lane, not a queue change.** The console cannot place the bytes — no browser role may
+  write `article-public`, and `validate-env.mts` forbids the service-role key in the web app — so
+  the worker draws and copies. It does so on its own lane alongside topic discovery
+  (`local-worker/src/reimage/`), leaving `claim_next_job` untouched. A failure is recorded on the
+  replacement row and never reaches the job queue's retry and escalation path.
+- **Two routes for the editor.** "Draw a new one" re-runs the image prompt with an optional steer
+  appended, and is offered only when the job's images stage is `gemini_api` or `codex_image`.
+  "I'll supply the file" uploads straight to private Storage under a path-scoped policy, and is
+  always available. Either way the candidate appears beside the live hero for a yes or no.
+- **One draw, one code path.** `drawGeminiImage` is extracted from the images adapter, so a
+  replacement is drawn by exactly the request that drew the original.
+
+Files/migrations affected: `supabase/migrations/20260921180000_editorial_illustration_prompts.sql`
+and `20260921180100_hero_image_replacement.sql`; `prompts/image-brief.md`, `prompts/draft.md`,
+`supabase/seeds/prompts.sql`; generated database types; `local-worker/src/reimage/service.ts`
+(new), `providers/api/gemini.ts`, `providers/cli/codex-images.ts`, `providers/cli/adapters.ts`,
+`queue/runner.ts`, `cli/main.ts`; `src/lib/admin/hero-replacement-actions.ts` (new) and
+`jobs.ts`; `src/components/admin/hero-replacement-panel.tsx` (new); the admin article page; this
+file.
+
+Verification performed: both migrations dry-run inside a rolled-back transaction, then applied with
+`supabase migration up --local`; `pnpm db:lint` clean; the prompt migration verified to leave
+version 1 inactive and intact while activating version 2, and to be a no-op where the active content
+already matches or was edited in the console; 424 unit tests (10 new for the replacement lane,
+covering the rendered prompt, the appended steer, the style guide staying out of an image prompt, a
+drawn candidate, an applied one, a refusal for a stage that cannot draw unattended, and a provider
+failure recorded against the replacement rather than the queue); format, lint, typecheck, and
+production build pass.
+
+Result: Passed for the prompt rewrite and the replacement machinery, on the local stack only. No
+image has been regenerated against a real provider end to end, and both migrations are unapplied on
+the hosted database.
 
 ### 2026-09-21 — The editor's desk: publish now, readable drafts, plain statuses
 

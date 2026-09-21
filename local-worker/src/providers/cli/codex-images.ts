@@ -20,11 +20,12 @@ import { CliProviderError } from "./errors.js";
  * ChatGPT image generation through Codex on the owner's subscription (mode `codex_image`).
  *
  * Preparation is the manual image adapter's, so the reviewed `image-brief` template and the draft's
- * briefs are the prompt source for every image mode. The shared template asks a person for a file
- * plus JSON metadata; Codex is told to skip that part, because the worker records the metadata
- * from the approved brief exactly as the Gemini API mode does. The file's real type, size,
- * dimensions, and hash are read from the bytes, and an image whose shape does not match the brief's
- * aspect ratio is rejected rather than published with a bad crop.
+ * briefs are the prompt source for every image mode. The template asks for the image alone; the
+ * worker records the metadata from the approved brief exactly as the Gemini API mode does. Only the
+ * orientation and the no-files instruction are appended here, because Codex draws through a tool
+ * call rather than returning bytes. The file's real type, size, dimensions, and hash are read from
+ * the bytes, and an image whose shape does not match the brief's aspect ratio is rejected rather
+ * than published with a bad crop.
  */
 
 const ASPECT_RATIOS = { "16:9": 16 / 9, "4:5": 4 / 5, "3:2": 3 / 2, "1:1": 1 } as const;
@@ -38,10 +39,9 @@ export function codexImagePrompt(templatePrompt: string, aspectRatio: string): s
   return (
     `${templatePrompt.trim()}\n\n` +
     "## How to deliver this image\n\n" +
-    "Ignore the metadata and output instructions above: the publishing system records the " +
-    "metadata itself. Use your built-in image generation tool to create exactly one image for " +
-    `this brief, in ${aspectRatio} ${orientation} format. Do not write, copy, or move any files, ` +
-    "and do not return JSON. When the image has been generated, reply with the single word DONE."
+    "Use your built-in image generation tool to create exactly one image for this brief, in " +
+    `${aspectRatio} ${orientation} format. Do not write, copy, or move any files. When the image ` +
+    "has been generated, reply with the single word DONE."
   );
 }
 

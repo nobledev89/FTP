@@ -60,6 +60,8 @@ type RunnerOptions = {
   discovery?: Readonly<{ runIfDue(signal: AbortSignal): Promise<unknown> }>;
   /** How often to ask the database whether a scan is due. The database owns the real interval. */
   discoveryCheckIntervalMs?: number;
+  /** Hero image replacements for published articles, on their own lane like discovery. */
+  heroReplacements?: Readonly<{ runNext(signal: AbortSignal): Promise<unknown> }>;
 };
 
 export class WorkerRunner {
@@ -74,6 +76,7 @@ export class WorkerRunner {
   private readonly providerHealth: (() => Record<string, Json>) | undefined;
   private readonly discovery: RunnerOptions["discovery"];
   private readonly discoveryCheckIntervalMs: number;
+  private readonly heroReplacements: RunnerOptions["heroReplacements"];
   private lastDiscoveryCheck = Number.NEGATIVE_INFINITY;
 
   constructor(options: RunnerOptions) {
@@ -89,6 +92,7 @@ export class WorkerRunner {
     this.providerHealth = options.providerHealth;
     this.discovery = options.discovery;
     this.discoveryCheckIntervalMs = options.discoveryCheckIntervalMs ?? 60_000;
+    this.heroReplacements = options.heroReplacements;
     this.leaseRenewIntervalMs =
       options.leaseRenewIntervalMs ??
       Math.max(
@@ -114,6 +118,7 @@ export class WorkerRunner {
     if (recovered > 0) this.logger.warn("leases.recovered", { count: recovered });
 
     await this.maybeDiscover(signal);
+    await this.maybeReplaceHeroImage(signal);
 
     const stages = this.supportedStages;
     if (stages.length === 0) {
@@ -171,6 +176,21 @@ export class WorkerRunner {
       this.logger.warn("discovery.check_failed", { error });
     } finally {
       clearInterval(heartbeat);
+    }
+  }
+
+  /**
+   * One replacement step per poll. An editor waits on this, so it is checked every time round
+   * rather than on an interval, and a replacement that fails is recorded on its own row without
+   * ever reaching the job queue's retry and escalation machinery.
+   */
+  private async maybeReplaceHeroImage(signal: AbortSignal): Promise<void> {
+    if (!this.heroReplacements) return;
+    try {
+      await this.heroReplacements.runNext(signal);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      this.logger.warn("hero_replacement.check_failed", { error });
     }
   }
 

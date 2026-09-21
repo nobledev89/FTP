@@ -288,9 +288,48 @@ source keys the article relies on.
 - `sourceReferences` lists the `sourceKey` values you actually relied on, in the order a reader
   should see them. Do not list a source you did not use. Do not list a source marked `isPrivate`.
 - `internalLinks` are suggestions only, each an absolute site path beginning with `/`.
-- Produce exactly {{imageCount}} image briefs. Slot 0 is the hero and is `16:9`; any further slots
-  are supporting. Every brief needs real alt text.
+- Produce exactly {{imageCount}} image briefs, following the section below.
 - The slug is lowercase and hyphenated, derived from the title, with no date and no filler.
+
+## Image briefs
+
+Produce exactly {{imageCount}} briefs. Slot 0 is the hero and is `16:9`; any further slots are
+supporting. The illustrator receives the `prompt` field and nothing else about the article, so it
+has to stand on its own.
+
+FinTechPulse illustrations are screenprinted editorial illustrations in three inks. You do not
+describe the style — that is fixed and the image stage supplies it. **Your job is to find the
+picture.** Give the illustrator one concrete scene made of nameable physical objects, not a concept.
+
+- Name real things from this story's own world: a bank card, a paper form, a shuttered shopfront,
+  a queue, a turnstile, a ledger, a set of keys, a lift button, a stack of envelopes, a postbox.
+- Carry the article's argument through a twist of scale or arrangement — the object far too large,
+  repeated into a wall, cut in half, locked, balanced, queued behind, left alone in a room.
+- One subject, described in one or two sentences. Say what is in the frame and where it sits.
+- Where the article turns on something being unknown, withheld, or unverified, find the picture of
+  the absence: the sealed envelope, the blanked-out panel, the door with no handle.
+
+Do not write a brief that would suit any fintech article. A brief that says "a network of connected
+nodes", "a stylised city skyline", "a smartphone with icons around it", or "abstract representation
+of data flowing" has failed — it produces the dull, interchangeable image that these rules exist to
+prevent. If your brief does not name a physical object, rewrite it.
+
+Never ask for text, lettering, numbers, real logos, recognisable real people, or charts: the image
+stage refuses them and the model renders them badly.
+
+`altText` describes the finished picture for a reader who cannot see it. One sentence, no "image
+of", not a repeat of the headline. `purpose` says in a few words what the image has to do for the
+article.
+
+### Two examples
+
+Weak: "An abstract visualisation of open banking data moving between institutions."
+Strong: "A single bank card, twenty times life size, standing upright on a bare floor like a
+monolith, with a small open doorway cut into its lower edge."
+
+Weak: "A conceptual image representing regulatory uncertainty in UK fintech."
+Strong: "A tall stack of identical sealed envelopes on a plain desk, one of them halfway out of the
+pile, the rest impossible to tell apart."
 
 ## Output
 
@@ -332,82 +371,74 @@ on conflict (site_id, key, version) do nothing;
 insert into public.prompt_templates (site_id, key, version, content, variables_schema, notes, is_active)
 select s.id, 'image-brief', 1, $prompt$# Image stage
 
-You are producing editorial imagery for FinTechPulse, a UK financial and fintech publication. You
-are given one image brief from an approved draft. Produce the image and its metadata.
+Generate one editorial illustration for FinTechPulse, a UK financial and fintech publication. You
+are given the brief for a single image. Produce the image and nothing else.
 
-## Editorial style guide
+## The picture to make
 
-{{styleGuide}}
+{{prompt}}
 
-## Brief
+It should read as: {{altText}}
 
-- Article title: {{title}}
-- Article type: {{articleType}}
-- Slot: {{slot}} ({{role}})
-- Aspect ratio: {{aspectRatio}}
-- Purpose: {{purpose}}
-- Requested alt text: {{altText}}
-- Image prompt: {{prompt}}
+- Article: {{title}}
+- What this image has to do: {{purpose}}
+- Placement: slot {{slot}}, the {{role}} image, {{aspectRatio}}.
 
-## Visual direction
+## House style
 
-The publication's look is restrained editorial, not stock-photo corporate and not AI-slop
-futurism. Aim for:
+Every FinTechPulse illustration is the same kind of object: a **screenprinted editorial
+illustration**, as though pulled on a press in three inks on uncoated paper. This is the look, and
+it does not vary between articles.
 
-- Calm, near-neutral palettes. One accent colour at most.
-- Real editorial subject matter: a document, a building, a card terminal, a chart on a desk, a
-  street-level scene in a recognisable British setting.
-- Natural, even light. No lens flare, no neon rim lighting, no glowing circuitry.
-- Space for the image to be cropped: keep the subject clear of the extreme edges.
+**Inks.** Exactly three, plus the paper. Warm near-black `#1C1917`, warm grey `#A8A29E`, and
+vermilion `#C2410C` on bone white `#F5F5F4`. Vermilion is the accent and is used sparingly — one
+shape, one gesture, the thing the eye should land on first. Never introduce a fourth colour, and
+never use vermilion for more than about a fifth of the image.
 
-Avoid entirely:
+**Surface.** Flat areas of solid ink with a coarse halftone grain where tone is needed. Visible
+paper tooth. Slight misregistration between the inks, as real screenprinting has. No gradients, no
+airbrushing, no 3D rendering, no gloss, no soft drop shadows. A shadow, where one exists, is a hard
+flat shape in a single ink.
 
-- Glowing blue holograms, floating padlocks, binary rain, robot hands, brains made of circuits.
-- Fabricated charts, invented figures, or any data visualisation that asserts something untrue.
-- Logos, wordmarks, or trade dress of real companies, and anything implying their endorsement.
-- Photorealistic depictions of identifiable real people.
-- Text rendered inside the image, which models render badly and which cannot be corrected later.
+**Drawing.** Confident, slightly graphic, closer to a woodcut or a mid-century poster than to a
+technical diagram. Objects are simplified to their silhouette and one or two interior marks. Edges
+are decisive.
 
-## Metadata rules
+**Contrast.** High. Large areas of solid dark against large areas of bare paper. This is a printed
+poster, not a watercolour — if the image would read as pale or washed out at thumbnail size, it is
+wrong.
 
-- `altText` describes what is in the image for a reader who cannot see it. It is not a caption, not
-  a repeat of the headline, and not a keyword list. One sentence, no "image of".
-- `caption` is optional and must add information the body does not already carry. Omit it rather
-  than restating the headline.
-- `focalX`/`focalY` are percentages (0–100) marking the point that must survive cropping. Provide
-  both or neither.
-- Record the true `width`, `height`, `mimeType`, and `byteSize` of the file you produced.
-- Hero images are slot 0 and `16:9`.
+## Finding the picture
+
+The brief gives you a subject. Turn it into **one concrete image with one idea in it**, built from
+real objects a reader could name.
+
+- Pick physical things from the story's own world — a bank card, a paper form, a turnstile, a
+  shuttered door, a queue, a ledger, a set of keys, a postbox, a lift button, a stack of envelopes.
+- Give it a twist of scale or relation that carries the argument: the object far too large, far too
+  small, repeated into a wall, cut in half, balanced, locked, queued behind.
+- One subject dominates. Everything else is space.
+- Place the subject off-centre and keep it clear of the extreme edges; the image gets cropped to
+  several shapes.
+
+What this must never become: a network of glowing nodes, a skyline with lines drawn over it, icons
+arranged in a row, a flowchart, a phone with arrows pointing at it, or any other picture of a
+concept rather than a thing. If your idea could illustrate any fintech article, it is the wrong
+idea — go back and find the object that belongs to _this_ story.
+
+## Hard rules
+
+- **No text of any kind** in the image: no words, numbers, labels, signage, or lettering. Models
+  render them badly and they cannot be corrected afterwards.
+- **No real logos, wordmarks, trade dress, or recognisable real people.**
+- **No charts, graphs, or data of any kind.** An invented figure in an image is a fabrication.
 
 ## Output
 
-Return the image file, plus a single JSON object matching schema `{{schemaVersion}}` and nothing
-else — no prose before or after, no Markdown fence.
-
-```json
-{
-  "slot": 0,
-  "role": "hero | supporting",
-  "purpose": "string",
-  "prompt": "string",
-  "altText": "string",
-  "caption": "string",
-  "aspectRatio": "16:9",
-  "focalX": 50,
-  "focalY": 40,
-  "width": 1600,
-  "height": 900,
-  "mimeType": "image/png | image/jpeg | image/webp | image/avif",
-  "byteSize": 123456,
-  "contentHash": "sha256 hex",
-  "status": "briefed | uploaded | ready | published | rejected",
-  "privatePath": "jobs/<job id>/..."
-}
-```
-
-Nullable fields may be `null`. A `ready` image must have alt text, a private path, and a MIME type.
+Return the generated image only. No text, no commentary, no JSON — the publishing system records
+the image's metadata itself from the approved brief.
 $prompt$,
-       '{"type":"object","properties":{"altText":{"type":"string"},"articleType":{"type":"string"},"aspectRatio":{"type":"string"},"prompt":{"type":"string"},"purpose":{"type":"string"},"role":{"type":"string"},"schemaVersion":{"type":"string"},"slot":{"type":"string"},"styleGuide":{"type":"string"},"title":{"type":"string"}},"required":["altText","articleType","aspectRatio","prompt","purpose","role","schemaVersion","slot","styleGuide","title"],"additionalProperties":false}'::jsonb,
+       '{"type":"object","properties":{"altText":{"type":"string"},"aspectRatio":{"type":"string"},"prompt":{"type":"string"},"purpose":{"type":"string"},"role":{"type":"string"},"slot":{"type":"string"},"title":{"type":"string"}},"required":["altText","aspectRatio","prompt","purpose","role","slot","title"],"additionalProperties":false}'::jsonb,
        'Gemini image stage, one brief per slot. Seeded from prompts/image-brief.md.', true
 from public.sites s
 where s.slug = 'fintechpulse'

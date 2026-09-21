@@ -42,9 +42,48 @@ source keys the article relies on.
 - `sourceReferences` lists the `sourceKey` values you actually relied on, in the order a reader
   should see them. Do not list a source you did not use. Do not list a source marked `isPrivate`.
 - `internalLinks` are suggestions only, each an absolute site path beginning with `/`.
-- Produce exactly {{imageCount}} image briefs. Slot 0 is the hero and is `16:9`; any further slots
-  are supporting. Every brief needs real alt text.
+- Produce exactly {{imageCount}} image briefs, following the section below.
 - The slug is lowercase and hyphenated, derived from the title, with no date and no filler.
+
+## Image briefs
+
+Produce exactly {{imageCount}} briefs. Slot 0 is the hero and is `16:9`; any further slots are
+supporting. The illustrator receives the `prompt` field and nothing else about the article, so it
+has to stand on its own.
+
+FinTechPulse illustrations are screenprinted editorial illustrations in three inks. You do not
+describe the style — that is fixed and the image stage supplies it. **Your job is to find the
+picture.** Give the illustrator one concrete scene made of nameable physical objects, not a concept.
+
+- Name real things from this story's own world: a bank card, a paper form, a shuttered shopfront,
+  a queue, a turnstile, a ledger, a set of keys, a lift button, a stack of envelopes, a postbox.
+- Carry the article's argument through a twist of scale or arrangement — the object far too large,
+  repeated into a wall, cut in half, locked, balanced, queued behind, left alone in a room.
+- One subject, described in one or two sentences. Say what is in the frame and where it sits.
+- Where the article turns on something being unknown, withheld, or unverified, find the picture of
+  the absence: the sealed envelope, the blanked-out panel, the door with no handle.
+
+Do not write a brief that would suit any fintech article. A brief that says "a network of connected
+nodes", "a stylised city skyline", "a smartphone with icons around it", or "abstract representation
+of data flowing" has failed — it produces the dull, interchangeable image that these rules exist to
+prevent. If your brief does not name a physical object, rewrite it.
+
+Never ask for text, lettering, numbers, real logos, recognisable real people, or charts: the image
+stage refuses them and the model renders them badly.
+
+`altText` describes the finished picture for a reader who cannot see it. One sentence, no "image
+of", not a repeat of the headline. `purpose` says in a few words what the image has to do for the
+article.
+
+### Two examples
+
+Weak: "An abstract visualisation of open banking data moving between institutions."
+Strong: "A single bank card, twenty times life size, standing upright on a bare floor like a
+monolith, with a small open doorway cut into its lower edge."
+
+Weak: "A conceptual image representing regulatory uncertainty in UK fintech."
+Strong: "A tall stack of identical sealed envelopes on a plain desk, one of them halfway out of the
+pile, the rest impossible to tell apart."
 
 ## Output
 

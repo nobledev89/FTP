@@ -263,6 +263,31 @@ const articleSchema = z
   })
   .strict();
 
+const heroReplacementSchema = z
+  .object({
+    id: uuidSchema,
+    mode: z.enum(["regenerate", "upload"]),
+    status: z.enum([
+      "pending",
+      "drawing",
+      "awaiting_review",
+      "approved",
+      "applying",
+      "applied",
+      "rejected",
+      "cancelled",
+      "failed",
+    ]),
+    direction: z.string().nullable(),
+    image_id: uuidSchema.nullable(),
+    review_note: z.string().nullable(),
+    error_summary: z.string().nullable(),
+    requested_at: timestampSchema,
+    reviewed_at: timestampSchema.nullable(),
+    applied_at: timestampSchema.nullable(),
+  })
+  .strict();
+
 export type ResearchSummary = z.infer<typeof researchSummarySchema>;
 export type DraftSummary = z.infer<typeof draftSummarySchema>;
 export type AuditSummary = z.infer<typeof auditSummarySchema>;
@@ -271,6 +296,7 @@ export type ProviderRunSummary = z.infer<typeof providerRunSummarySchema>;
 export type ManualActionRun = z.infer<typeof manualActionRunSchema>;
 export type PublishingLogRow = z.infer<typeof publishingLogSchema>;
 export type PublishedArticle = z.infer<typeof articleSchema>;
+export type HeroReplacement = z.infer<typeof heroReplacementSchema>;
 
 export type JobDetail = Readonly<{
   job: ArticleJob;
@@ -282,6 +308,8 @@ export type JobDetail = Readonly<{
   manualAction: ManualActionRun | null;
   publishingLogs: readonly PublishingLogRow[];
   article: PublishedArticle | null;
+  /** The most recent hero image replacement, open or finished. Null when none was ever asked for. */
+  heroReplacement: HeroReplacement | null;
 }>;
 
 /**
@@ -299,70 +327,90 @@ export async function getJobDetail(jobId: string): Promise<JobDetail | null> {
 
   const job = articleJobSchema.parse(jobResult.data);
 
-  const [research, drafts, audits, images, runs, logs, article, manualAction] = await Promise.all([
-    client
-      .from("research_packets")
-      .select(
-        "id, version, summary, schema_version, validation_status, provider_run_id, created_at",
-      )
-      .eq("job_id", id.data)
-      .order("version", { ascending: false }),
-    client
-      .from("drafts")
-      .select(
-        "id, version, origin, title, slug, excerpt, meta_title, meta_description, category, parent_draft_id, responds_to_audit_id, provider_run_id, validation_status, created_at",
-      )
-      .eq("job_id", id.data)
-      .order("version", { ascending: false }),
-    client
-      .from("audits")
-      .select("id, version, draft_id, cycle, verdict, summary, findings, created_at")
-      .eq("job_id", id.data)
-      .order("version", { ascending: false }),
-    client
-      .from("images")
-      .select(
-        "id, slot, version, role, purpose, prompt, alt_text, caption, aspect_ratio, status, width, height, mime_type, private_path, public_path, provider_run_id, created_at",
-      )
-      .eq("job_id", id.data)
-      .order("slot", { ascending: true })
-      .order("version", { ascending: false }),
-    client
-      .from("provider_runs")
-      .select(
-        "id, stage, provider, mode, cycle, attempt, status, error_class, error_summary, worker_id, started_at, finished_at, cost_amount, cost_currency",
-      )
-      .eq("job_id", id.data)
-      .order("started_at", { ascending: false }),
-    client
-      .from("publishing_logs")
-      .select(
-        "id, kind, check_name, outcome, attempt, http_status, duration_ms, result_summary, error, created_at",
-      )
-      .eq("job_id", id.data)
-      .order("id", { ascending: false }),
-    job.article_id
-      ? client
-          .from("articles")
-          .select(
-            "id, slug, title, excerpt, meta_title, meta_description, canonical_url, status, published_at, verified_at, content_updated_at, withdrawn_at",
-          )
-          .eq("id", job.article_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    job.action_required_run_id
-      ? client
-          .from("provider_runs")
-          .select(
-            "id, job_id, stage, provider, mode, prompt_snapshot, schema_version, input_refs, output_ref, status, started_at",
-          )
-          .eq("id", job.action_required_run_id)
-          .eq("job_id", job.id)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-  ]);
+  const [research, drafts, audits, images, runs, logs, article, manualAction, replacement] =
+    await Promise.all([
+      client
+        .from("research_packets")
+        .select(
+          "id, version, summary, schema_version, validation_status, provider_run_id, created_at",
+        )
+        .eq("job_id", id.data)
+        .order("version", { ascending: false }),
+      client
+        .from("drafts")
+        .select(
+          "id, version, origin, title, slug, excerpt, meta_title, meta_description, category, parent_draft_id, responds_to_audit_id, provider_run_id, validation_status, created_at",
+        )
+        .eq("job_id", id.data)
+        .order("version", { ascending: false }),
+      client
+        .from("audits")
+        .select("id, version, draft_id, cycle, verdict, summary, findings, created_at")
+        .eq("job_id", id.data)
+        .order("version", { ascending: false }),
+      client
+        .from("images")
+        .select(
+          "id, slot, version, role, purpose, prompt, alt_text, caption, aspect_ratio, status, width, height, mime_type, private_path, public_path, provider_run_id, created_at",
+        )
+        .eq("job_id", id.data)
+        .order("slot", { ascending: true })
+        .order("version", { ascending: false }),
+      client
+        .from("provider_runs")
+        .select(
+          "id, stage, provider, mode, cycle, attempt, status, error_class, error_summary, worker_id, started_at, finished_at, cost_amount, cost_currency",
+        )
+        .eq("job_id", id.data)
+        .order("started_at", { ascending: false }),
+      client
+        .from("publishing_logs")
+        .select(
+          "id, kind, check_name, outcome, attempt, http_status, duration_ms, result_summary, error, created_at",
+        )
+        .eq("job_id", id.data)
+        .order("id", { ascending: false }),
+      job.article_id
+        ? client
+            .from("articles")
+            .select(
+              "id, slug, title, excerpt, meta_title, meta_description, canonical_url, status, published_at, verified_at, content_updated_at, withdrawn_at",
+            )
+            .eq("id", job.article_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      job.action_required_run_id
+        ? client
+            .from("provider_runs")
+            .select(
+              "id, job_id, stage, provider, mode, prompt_snapshot, schema_version, input_refs, output_ref, status, started_at",
+            )
+            .eq("id", job.action_required_run_id)
+            .eq("job_id", job.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      client
+        .from("hero_image_replacements")
+        .select(
+          "id, mode, status, direction, image_id, review_note, error_summary, requested_at, reviewed_at, applied_at",
+        )
+        .eq("job_id", id.data)
+        .order("requested_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-  for (const result of [research, drafts, audits, images, runs, logs, article, manualAction]) {
+  for (const result of [
+    research,
+    drafts,
+    audits,
+    images,
+    runs,
+    logs,
+    article,
+    manualAction,
+    replacement,
+  ]) {
     if (result.error) throw toWorkflowError(result.error);
   }
 
@@ -386,6 +434,7 @@ export async function getJobDetail(jobId: string): Promise<JobDetail | null> {
         result_summary: redactJsonObject(log.result_summary),
       })),
     article: article.data ? articleSchema.parse(article.data) : null,
+    heroReplacement: replacement.data ? heroReplacementSchema.parse(replacement.data) : null,
   };
 }
 
@@ -435,33 +484,61 @@ export type HeroPreview = Readonly<{
 const PREVIEW_URL_SECONDS = 15 * 60;
 
 /**
- * A short-lived URL for the newest usable hero image, read from the private working bucket (which
- * admins may read under the Storage policies). The preview works before publication, and a job
- * that never reaches the public bucket never exposes its image there.
+ * Every preview is signed against the private working bucket, which admins may read under the
+ * Storage policies. The private copy exists for every image, published or not, so one code path
+ * serves a draft's first hero and a live article's current one alike, and a job that never reaches
+ * the public bucket never exposes its image there.
  */
-export async function getHeroPreview(images: readonly ImageSummary[]): Promise<HeroPreview | null> {
-  const hero = images
-    .filter(
-      (image) =>
-        image.role === "hero" &&
-        image.private_path !== null &&
-        (image.status === "ready" || image.status === "published" || image.status === "uploaded"),
-    )
-    .sort((a, b) => a.slot - b.slot || b.version - a.version)[0];
-  if (!hero?.private_path) return null;
-
+async function signedPreview(image: ImageSummary | undefined): Promise<HeroPreview | null> {
+  if (!image?.private_path) return null;
   const client = await createSupabaseServerClient();
   const { data, error } = await client.storage
     .from("article-work")
-    .createSignedUrl(hero.private_path, PREVIEW_URL_SECONDS);
+    .createSignedUrl(image.private_path, PREVIEW_URL_SECONDS);
   if (error || !data) return null;
   return {
     url: data.signedUrl,
-    alt: hero.alt_text ?? "",
-    caption: hero.caption,
-    width: hero.width,
-    height: hero.height,
+    alt: image.alt_text ?? "",
+    caption: image.caption,
+    width: image.width,
+    height: image.height,
   };
+}
+
+/** The newest usable hero, whatever its state. Used before an article is live. */
+export async function getHeroPreview(images: readonly ImageSummary[]): Promise<HeroPreview | null> {
+  return signedPreview(
+    images
+      .filter(
+        (image) =>
+          image.role === "hero" &&
+          image.private_path !== null &&
+          (image.status === "ready" || image.status === "published" || image.status === "uploaded"),
+      )
+      .sort((a, b) => a.slot - b.slot || b.version - a.version)[0],
+  );
+}
+
+/**
+ * The hero a reader sees right now: the published version with the highest number. A replacement
+ * that has been drawn but not approved is 'ready', so it never displaces this.
+ */
+export async function getLiveHeroPreview(
+  images: readonly ImageSummary[],
+): Promise<HeroPreview | null> {
+  return signedPreview(
+    images
+      .filter((image) => image.role === "hero" && image.status === "published")
+      .sort((a, b) => b.version - a.version)[0],
+  );
+}
+
+/** One nominated image version, for showing a replacement candidate beside the live hero. */
+export async function getImagePreview(
+  images: readonly ImageSummary[],
+  imageId: string | null,
+): Promise<HeroPreview | null> {
+  return signedPreview(images.find((candidate) => candidate.id === imageId));
 }
 
 const researchPacketSchema = z

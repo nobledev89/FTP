@@ -7,6 +7,7 @@ import { AuditChecklist } from "@/components/admin/audit-checklist";
 import { Cell, FilterTabs, Pager, Table, TableHead, TableRow } from "@/components/admin/data-table";
 import { DecisionPanel } from "@/components/admin/decision-panel";
 import { DraftPreview } from "@/components/admin/draft-preview";
+import { HeroReplacementPanel } from "@/components/admin/hero-replacement-panel";
 import { EditorialBadge } from "@/components/admin/editorial-badge";
 import { JobControls } from "@/components/admin/job-controls";
 import { JobStatusBadge } from "@/components/admin/job-status-badge";
@@ -19,7 +20,9 @@ import { availableControls, resolutionDestinations } from "@/lib/admin/job-contr
 import {
   getDraftBody,
   getHeroPreview,
+  getImagePreview,
   getJobDetail,
+  getLiveHeroPreview,
   listJobEvents,
   listSources,
 } from "@/lib/admin/jobs";
@@ -91,15 +94,20 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
       ? detail.manualAction.input_refs.draft_version
       : null;
 
-  const [events, sources, draftBody, manualImageDraft, hero] = await Promise.all([
-    view === "details" ? listJobEvents(job.id, eventPage, EVENT_PAGE_SIZE) : Promise.resolve(null),
-    view === "details" ? listSources(job.id) : Promise.resolve([]),
-    draftVersion === null ? Promise.resolve(null) : getDraftBody(job.id, draftVersion),
-    manualImageDraftVersion === null
-      ? Promise.resolve(null)
-      : getDraftBody(job.id, manualImageDraftVersion),
-    getHeroPreview(detail.images),
-  ]);
+  const [events, sources, draftBody, manualImageDraft, hero, liveHero, candidateHero] =
+    await Promise.all([
+      view === "details"
+        ? listJobEvents(job.id, eventPage, EVENT_PAGE_SIZE)
+        : Promise.resolve(null),
+      view === "details" ? listSources(job.id) : Promise.resolve([]),
+      draftVersion === null ? Promise.resolve(null) : getDraftBody(job.id, draftVersion),
+      manualImageDraftVersion === null
+        ? Promise.resolve(null)
+        : getDraftBody(job.id, manualImageDraftVersion),
+      getHeroPreview(detail.images),
+      getLiveHeroPreview(detail.images),
+      getImagePreview(detail.images, detail.heroReplacement?.image_id ?? null),
+    ]);
 
   const latestAudit = detail.audits[0];
   const snapshot = {
@@ -354,6 +362,27 @@ export default async function ArticleDetailPage({ params, searchParams }: Articl
                       </Notice>
                     </div>
                   ) : null}
+                </Panel>
+              ) : null}
+
+              {detail.article && detail.article.status !== "withdrawn" ? (
+                <Panel
+                  description="Swap the picture without touching the article. The worker draws or publishes it; you decide whether it goes live."
+                  title="Article image"
+                >
+                  <HeroReplacementPanel
+                    canEdit={session.canEdit}
+                    canRegenerate={
+                      job.images_mode === "gemini_api" || job.images_mode === "codex_image"
+                    }
+                    candidate={candidateHero}
+                    imagesMode={job.images_mode}
+                    jobId={job.id}
+                    live={liveHero}
+                    lockVersion={job.lock_version}
+                    replacement={detail.heroReplacement}
+                    slug={detail.article.slug}
+                  />
                 </Panel>
               ) : null}
             </div>
