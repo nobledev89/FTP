@@ -48,6 +48,28 @@ export const GROUP_LABELS: Readonly<Record<JobGroup, string>> = {
 
 const TERMINAL_STATUSES: readonly JobStatus[] = ["PUBLISHED", "VERIFIED"];
 
+/**
+ * Work the pipeline is carrying right now: queued or running at a stage. It excludes the states
+ * that belong to a person (IDEA, FAILED, NEEDS_HUMAN, PAUSED) and those waiting on a publication
+ * time (APPROVED, SCHEDULED), which the dashboard lists under their own headings.
+ */
+export const IN_PROGRESS_STATUSES: readonly JobStatus[] = [
+  "RESEARCH_PENDING",
+  "RESEARCHING",
+  "RESEARCH_COMPLETE",
+  "DRAFT_PENDING",
+  "DRAFTING",
+  "DRAFT_COMPLETE",
+  "IMAGES_PENDING",
+  "IMAGES_PROCESSING",
+  "AUDIT_PENDING",
+  "AUDITING",
+  "REVISION_REQUIRED",
+  "REVISING",
+  "RE_AUDIT_PENDING",
+  "PUBLISHING",
+];
+
 /** Statuses a group expands to. `action_required` is a column, not a status, so it stays empty. */
 const GROUP_STATUSES: Readonly<Record<JobGroup, readonly JobStatus[]>> = {
   all: [],

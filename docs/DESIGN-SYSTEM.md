@@ -283,6 +283,12 @@ with the public site.
   durations, and timestamps. No serif anywhere.
 - Radii: 4px controls, 6px panels. Borders are 1px.
 - Status badges always combine colour with a text label; colour alone never carries meaning.
+- Editorial screens name a job's state in the reader's words (Needs you, In progress, Ready to
+  publish, Scheduled, Live, Stopped) and keep the exact database status in the badge's tooltip and
+  under Technical details. Operational screens (logs, technical details) keep the database value as
+  the label. See docs/ADMIN-CONSOLE.md.
+- The draft preview is admin type, not public type: sans throughout, 15px body, one measure of at
+  most 42rem. It never borrows the public stylesheet, masthead, or editorial cards.
 - Layout: a persistent 224px sidebar on desktop and a top bar with a disclosure menu on mobile. Content
   is at most 80rem wide.
 - Density: 36px table rows and 32px controls (40px targets on touch layouts).

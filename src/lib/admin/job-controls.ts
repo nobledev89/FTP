@@ -24,6 +24,7 @@ export const CONTROL_KINDS = [
   "retry",
   "escalate",
   "resolve",
+  "publish_now",
   "schedule",
   "discard",
 ] as const;
@@ -44,7 +45,10 @@ export function availableControls(snapshot: JobControlSnapshot): readonly Contro
   const controls: ControlKind[] = [];
 
   if (snapshot.status === "IDEA") controls.push("start");
-  if (snapshot.status === "APPROVED") controls.push("schedule");
+  // A scheduled job is moved with `admin_reschedule_job`, which keeps it SCHEDULED.
+  if (snapshot.status === "APPROVED" || snapshot.status === "SCHEDULED") {
+    controls.push("publish_now", "schedule");
+  }
   if (isPausableStatus(snapshot.status)) controls.push("pause", "escalate");
   if (snapshot.status === "PAUSED" && snapshot.pausedFromStatus) controls.push("resume");
   if (snapshot.status === "FAILED" && snapshot.failedStage) controls.push("retry");
@@ -83,12 +87,13 @@ export function resolutionDestinations(snapshot: JobControlSnapshot): readonly J
 }
 
 export const CONTROL_LABELS = {
-  start: "Start research",
+  start: "Start the article",
   pause: "Pause",
   resume: "Resume",
-  retry: "Retry failed stage",
-  escalate: "Mark needs human",
-  resolve: "Resolve escalation",
+  retry: "Try again",
+  escalate: "Flag for review",
+  resolve: "Continue",
+  publish_now: "Publish now",
   schedule: "Schedule publication",
   discard: "Discard article",
 } as const satisfies Record<ControlKind, string>;

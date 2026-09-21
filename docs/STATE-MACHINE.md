@@ -51,6 +51,12 @@ or audit when no images were requested. A passing audit records the exact approv
 Automatic publication may queue a future schedule; otherwise an approved job waits for an explicit
 schedule or publish policy.
 
+An `APPROVED` job with `auto_publish` and no time is claimable immediately; that is what the
+opt-in `site_settings.discovery_auto_publish` sets on discovered jobs when they are created, so a
+discovered article can go live on its passing audit without an editor. It is off by default, and
+the value is fixed on each job at creation, so changing it never moves work already in the
+pipeline.
+
 `desired_publish_at` is an instant, never a local reading: the console converts the editor's local
 time using the site timezone, and the queue compares instants, so a repeated or skipped local hour is
 never ambiguous. A schedule more than a year out is rejected with `FT005` rather than parked in the
@@ -97,6 +103,20 @@ is mandatory. Resolution also requires a note and an explicit destination from:
 The database applies artifact gates as well as the transition map. An escalation at research, draft,
 or images cannot skip forward. Resolving to `APPROVED` requires the latest valid draft to be covered by
 the latest audit. A third automatic revision cycle is not allowed.
+
+### Rescheduling and publishing now
+
+A job is scheduled by `admin_transition_job` (`APPROVED → SCHEDULED`); with no time given, the
+schedule is `now()`, which is what the console's **Publish now** sends for a ready article.
+
+`admin_reschedule_job` moves an already `SCHEDULED` job's `desired_publish_at`, again defaulting to
+`now()`. The status does not change, so no transition is involved and the transition map is
+untouched; it checks the caller, the site, and `lock_version`, appends a `job.rescheduled` event,
+and leaves the horizon guard to reject a time more than a year out. A job the worker has already
+claimed for publication is `PUBLISHING`, not `SCHEDULED`, so it cannot be moved under the worker.
+
+Claim eligibility is unchanged: the queue publishes a `SCHEDULED` job once its instant has passed,
+so "publish now" means "on the worker's next poll", not "inside this request".
 
 ### Discarding
 

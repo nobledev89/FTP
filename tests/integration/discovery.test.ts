@@ -22,7 +22,8 @@ beforeEach(async () => {
   await db().query("update public.topic_categories set daily_target = 0");
   await db().query(
     `update public.site_settings set discovery_enabled = false, discovery_interval_minutes = 30,
-       discovery_image_count = 1, discovery_last_started_at = null`,
+       discovery_image_count = 1, discovery_auto_publish = false,
+       discovery_last_started_at = null`,
   );
 });
 
@@ -36,12 +37,13 @@ async function category(slug: string): Promise<{ id: string; name: string }> {
   return rows[0]!;
 }
 
-async function enable(targets: Record<string, number>) {
+async function enable(targets: Record<string, number>, autoPublish = false) {
   await succeed(
     editor.client.rpc("admin_update_discovery_settings", {
       p_enabled: true,
       p_interval_minutes: 30,
       p_image_count: 1,
+      p_auto_publish: autoPublish,
     }),
   );
   for (const [slug, target] of Object.entries(targets)) {
@@ -147,6 +149,43 @@ describe("topic discovery", () => {
       [run.run_id],
     );
     expect(rows[0].created_job_ids).toEqual([jobId]);
+  });
+
+  it("publishes discovered articles on its own only when the owner opts in", async () => {
+    await enable({ payments: 1 }, true);
+    const run = (await begin())!;
+    const payments = await category("payments");
+
+    const jobId = await unwrap(propose(run.run_id, payments.id, "https://example.com/news/auto"));
+    expect(await jobRow(jobId)).toMatchObject({ origin: "discovery", auto_publish: true });
+
+    // The setting is copied onto the job when it is created, so turning it off afterwards leaves
+    // articles already in the pipeline alone.
+    await succeed(
+      editor.client.rpc("admin_update_discovery_settings", {
+        p_enabled: true,
+        p_interval_minutes: 30,
+        p_image_count: 1,
+        p_auto_publish: false,
+      }),
+    );
+    expect((await jobRow(jobId)).auto_publish).toBe(true);
+
+    // Omitting the argument keeps whatever the publication has set.
+    await succeed(
+      editor.client.rpc("admin_update_discovery_settings", {
+        p_enabled: true,
+        p_interval_minutes: 45,
+        p_image_count: 1,
+      }),
+    );
+    const { rows } = await db().query(
+      "select discovery_auto_publish, discovery_interval_minutes from public.site_settings",
+    );
+    expect(rows[0]).toMatchObject({
+      discovery_auto_publish: false,
+      discovery_interval_minutes: 45,
+    });
   });
 
   it("enforces the daily quota and never uses the same story twice", async () => {

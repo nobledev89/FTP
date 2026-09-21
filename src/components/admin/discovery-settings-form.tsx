@@ -10,8 +10,9 @@ import { SubmitButton } from "./submit-button";
 
 /**
  * Topic discovery settings: the on/off switch, how often the worker scans, whether discovered
- * articles get a ChatGPT hero image, and each category's daily target. Discovered articles always
- * stop at APPROVED for an editor to schedule or discard.
+ * articles get a ChatGPT hero image, whether they publish on their own once their audit passes,
+ * and each category's daily target. Auto-publish is off by default, so discovered articles stop at
+ * APPROVED for an editor to publish, schedule, or discard.
  */
 
 type Category = Readonly<{
@@ -26,6 +27,7 @@ type DiscoverySettingsFormProps = {
   enabled: boolean;
   intervalMinutes: number;
   imageCount: number;
+  autoPublish: boolean;
   categories: readonly Category[];
   canEdit: boolean;
 };
@@ -34,6 +36,7 @@ export function DiscoverySettingsForm({
   enabled,
   intervalMinutes,
   imageCount,
+  autoPublish,
   categories,
   canEdit,
 }: DiscoverySettingsFormProps) {
@@ -48,10 +51,17 @@ export function DiscoverySettingsForm({
           <legend className="sr-only">Discovery</legend>
           <CheckboxField
             defaultChecked={enabled}
-            hint="The worker searches recent UK news and writes articles for the categories below. Nothing is published until you schedule it."
+            hint="The worker searches recent UK news and writes articles for the categories below."
             id="discoveryEnabled"
             label="Find and write articles automatically"
             name="enabled"
+          />
+          <CheckboxField
+            defaultChecked={autoPublish}
+            hint="Off: each article waits under Needs your decision until you publish, schedule, or discard it. On: it goes live as soon as it passes its check, and you can still withdraw it. Applies to articles found from now on."
+            id="discoveryAutoPublish"
+            label="Publish discovered articles automatically"
+            name="autoPublish"
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field

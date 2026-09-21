@@ -32,6 +32,7 @@ describe("availableControls", () => {
       "discard",
     ]);
     expect(availableControls(snapshot({ status: "APPROVED" }))).toEqual([
+      "publish_now",
       "schedule",
       "pause",
       "escalate",
@@ -47,6 +48,13 @@ describe("availableControls", () => {
     expect(
       availableControls(snapshot({ status: "NEEDS_HUMAN", needsHumanStage: "audit" })),
     ).toEqual(["resolve", "discard"]);
+    expect(availableControls(snapshot({ status: "SCHEDULED" }))).toEqual([
+      "publish_now",
+      "schedule",
+      "pause",
+      "escalate",
+      "discard",
+    ]);
   });
 
   it("offers nothing once the worker owns the outcome", () => {
@@ -65,6 +73,7 @@ describe("availableControls", () => {
       escalate: "mark_needs_human",
       resolve: "resolve",
       schedule: "schedule",
+      publish_now: "schedule",
       // Discarding is `admin_discard_job`, not a planner action; it follows the transition map.
       discard: null,
     } as const;
@@ -85,6 +94,8 @@ describe("availableControls", () => {
           expect(canTransition(status, "DISCARDED"), `${status} / discard`).toBe(true);
           continue;
         }
+        // Moving a scheduled job is `admin_reschedule_job`, which keeps the status.
+        if (status === "SCHEDULED" && action === "schedule") continue;
         const toStatus: JobStatus | undefined =
           action === "resolve" ? resolutionDestinations(current)[0] : undefined;
         expect(

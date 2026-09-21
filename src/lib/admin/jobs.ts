@@ -39,6 +39,7 @@ const JOB_LIST_COLUMNS = [
   "status",
   "article_type",
   "category",
+  "image_count",
   "revision_count",
   "attempt_count",
   "max_attempts",
@@ -62,6 +63,7 @@ export const jobListRowSchema = z
     status: jobStatusSchema,
     article_type: articleTypeSchema,
     category: z.string().nullable(),
+    image_count: z.number().int().min(0).max(3),
     revision_count: z.number().int().min(0).max(2),
     attempt_count: z.number().int().nonnegative(),
     max_attempts: z.number().int().positive(),
@@ -420,6 +422,46 @@ export async function getDraftBody(jobId: string, version: number): Promise<Draf
     .maybeSingle();
   if (error) throw toWorkflowError(error);
   return data ? draftBodySchema.parse(data) : null;
+}
+
+export type HeroPreview = Readonly<{
+  url: string;
+  alt: string;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+}>;
+
+const PREVIEW_URL_SECONDS = 15 * 60;
+
+/**
+ * A short-lived URL for the newest usable hero image, read from the private working bucket (which
+ * admins may read under the Storage policies). The preview works before publication, and a job
+ * that never reaches the public bucket never exposes its image there.
+ */
+export async function getHeroPreview(images: readonly ImageSummary[]): Promise<HeroPreview | null> {
+  const hero = images
+    .filter(
+      (image) =>
+        image.role === "hero" &&
+        image.private_path !== null &&
+        (image.status === "ready" || image.status === "published" || image.status === "uploaded"),
+    )
+    .sort((a, b) => a.slot - b.slot || b.version - a.version)[0];
+  if (!hero?.private_path) return null;
+
+  const client = await createSupabaseServerClient();
+  const { data, error } = await client.storage
+    .from("article-work")
+    .createSignedUrl(hero.private_path, PREVIEW_URL_SECONDS);
+  if (error || !data) return null;
+  return {
+    url: data.signedUrl,
+    alt: hero.alt_text ?? "",
+    caption: hero.caption,
+    width: hero.width,
+    height: hero.height,
+  };
 }
 
 const researchPacketSchema = z

@@ -26,6 +26,7 @@ const settingsSchema = z
     discovery_enabled: z.boolean(),
     discovery_interval_minutes: z.number().int(),
     discovery_image_count: z.number().int(),
+    discovery_auto_publish: z.boolean(),
     discovery_last_started_at: nullableTimestampSchema,
   })
   .strict();
@@ -63,14 +64,21 @@ const reviewSchema = z
     category: z.string().nullable(),
     origin: z.enum(["editor", "discovery"]),
     discovery_source: discoverySourceSchema.nullable(),
+    approved_draft_id: uuidSchema.nullable(),
+    lock_version: z.number().int().nonnegative(),
     updated_at: timestampSchema,
   })
+  .strict();
+
+const reviewDraftSchema = z
+  .object({ id: uuidSchema, title: z.string(), excerpt: z.string() })
   .strict();
 
 export type DiscoverySettings = z.infer<typeof settingsSchema>;
 export type TopicCategory = z.infer<typeof categorySchema> & Readonly<{ createdToday: number }>;
 export type DiscoveryRun = z.infer<typeof runSchema>;
-export type ReviewItem = z.infer<typeof reviewSchema>;
+export type ReviewItem = z.infer<typeof reviewSchema> &
+  Readonly<{ title: string | null; excerpt: string | null }>;
 
 export type DiscoveryOverview = Readonly<{
   settings: DiscoverySettings;
@@ -95,7 +103,7 @@ export async function getDiscoveryOverview(
     client
       .from("site_settings")
       .select(
-        "discovery_enabled, discovery_interval_minutes, discovery_image_count, discovery_last_started_at",
+        "discovery_enabled, discovery_interval_minutes, discovery_image_count, discovery_auto_publish, discovery_last_started_at",
       )
       .eq("site_id", siteId)
       .maybeSingle(),
@@ -143,19 +151,36 @@ export async function getDiscoveryOverview(
 }
 
 /**
- * Articles that passed their audit and are waiting for an editor to schedule or discard them.
- * Scheduled and auto-publish jobs are excluded: nobody needs to act on those.
+ * Articles that passed their audit and are waiting for an editor to publish, schedule, or discard.
+ * Auto-publish jobs are excluded: nobody needs to act on those. Each carries the headline and
+ * standfirst of its approved draft, so the decision can be made from the dashboard, and the
+ * `lock_version` the card was drawn with, so acting on a stale card is refused.
  */
 export async function listReadyForReview(siteId: string): Promise<readonly ReviewItem[]> {
   const client = await createSupabaseServerClient();
   const { data, error } = await client
     .from("article_jobs")
-    .select("id, topic, category, origin, discovery_source, updated_at")
+    .select(
+      "id, topic, category, origin, discovery_source, approved_draft_id, lock_version, updated_at",
+    )
     .eq("site_id", siteId)
     .eq("status", "APPROVED")
     .eq("auto_publish", false)
     .order("updated_at", { ascending: true })
     .limit(50);
   if (error) throw toWorkflowError(error);
-  return z.array(reviewSchema).parse(data);
+  const jobs = z.array(reviewSchema).parse(data);
+
+  const draftIds = jobs.flatMap((job) => (job.approved_draft_id ? [job.approved_draft_id] : []));
+  const drafts = new Map<string, z.infer<typeof reviewDraftSchema>>();
+  if (draftIds.length > 0) {
+    const result = await client.from("drafts").select("id, title, excerpt").in("id", draftIds);
+    if (result.error) throw toWorkflowError(result.error);
+    for (const draft of z.array(reviewDraftSchema).parse(result.data)) drafts.set(draft.id, draft);
+  }
+
+  return jobs.map((job) => {
+    const draft = job.approved_draft_id ? drafts.get(job.approved_draft_id) : undefined;
+    return { ...job, title: draft?.title ?? null, excerpt: draft?.excerpt ?? null };
+  });
 }

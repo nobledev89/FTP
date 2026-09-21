@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Topic discovery is live on production; the worker runs continuously on the owner's PC. |
-| Last updated           | 2026-09-21 16:50, Asia/Singapore                                     |
+| Current task           | The console was rebuilt around the editor's decisions: publish now, a readable draft, plain statuses, and opt-in auto-publish for discovery. |
+| Last updated           | 2026-09-21 18:20, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
 | Active blockers        | Production database writes must be run by the owner (auto mode refuses them). |
-| Next action            | Owner applies `20260921160000_seed_topic_discovery_prompt.sql`, sets category targets, and reviews the first discovered articles. |
+| Next action            | Owner applies `20260921160000_seed_topic_discovery_prompt.sql` and `20260921170000_editor_desk.sql`, sets category targets, and takes the first discovered article to `VERIFIED` from the new dashboard. |
 
 ## Status legend
 
@@ -63,8 +63,11 @@ This is the authoritative live record of implementation progress. Update it imme
       review before scheduling), ChatGPT images through Codex, and discarding.
 - [x] Apply the discovery migrations to production and run the worker continuously (Task
       Scheduler daemon).
-- [ ] Apply the discovery prompt migration, set category targets, and take the first discovered
-      article through review to `VERIFIED` on production.
+- [x] Rebuild the console around editorial decisions: publish now, rescheduling, a readable draft
+      preview, plain-language statuses with a step tracker, a decisions-first dashboard, and opt-in
+      auto-publish for discovered articles.
+- [ ] Apply the discovery prompt and editor-desk migrations, set category targets, and take the
+      first discovered article through review to `VERIFIED` on production.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -333,6 +336,73 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — The editor's desk: publish now, readable drafts, plain statuses
+
+Date/time: 2026-09-21 18:20, Asia/Singapore
+
+Phase/task: Phase 12 — owner-reported usability problem with controlling generated articles
+
+Status change: Phase 12 remains `IN_PROGRESS`.
+
+What changed: The owner could not tell how to control an article or publish one immediately. The
+capability existed (scheduling with a past time, which the database already reads as "now"), but it
+was spelled "Schedule publication", sat below eleven other panels, and refused an empty time. The
+console was rebuilt around the decision rather than the pipeline:
+
+- **Publish now** (`publishNowAction`): one button, no date typed. An `APPROVED` article is
+  scheduled for `now()`; a `SCHEDULED` one is moved to `now()` by the new `admin_reschedule_job`.
+  The worker publishes on its next poll and then verifies the live page. It is offered on the
+  article page and on each dashboard card.
+- **`admin_reschedule_job`** (`20260921170000`): moves a `SCHEDULED` job's `desired_publish_at`
+  (default `now()`) without a status change, so the transition map is untouched. It re-authorizes
+  the editor, checks the site and `lock_version`, appends `job.rescheduled`, and leaves the
+  existing one-year horizon guard to refuse a mistyped year. A job already claimed for publication
+  is `PUBLISHING`, so it cannot be moved under the worker.
+- **Reading view**: the article page leads with a decision panel (state in one sentence, a
+  Research → Write → Image → Check → Publish tracker, and only the decisions that apply), then the
+  draft rendered as it will read, with the hero image from the private bucket through a signed URL,
+  and the audit as a checklist of notes with their suggested fixes. Everything operational —
+  leases, lock version, provider runs, raw artifacts, logs, timeline — moved to a **Technical
+  details** view at `?view=details`.
+- **Plain statuses**: `src/lib/admin/editorial-status.ts` maps the 23 database statuses to six
+  editor-facing states and the step tracker; the exact status stays in the badge tooltip, the logs,
+  and Technical details. Escalation resolutions are offered as choices ("Approve it as it is")
+  instead of status names, and the note the database requires defaults to the chosen option.
+- **Dashboard as an inbox**: "Needs your decision" first (ready articles with their headline and
+  standfirst, manual-input waits, failures and escalations), each card carrying Publish now,
+  Schedule, and Discard; then In progress with step trackers, Scheduled, Recently live, and the
+  full list. Worker health is a single pill linking to Providers.
+- **Opt-in auto-publish for discovery** (`site_settings.discovery_auto_publish`, default off):
+  discovered articles may go live as soon as their audit passes. The value is copied onto each job
+  at creation, so changing it never moves work already in the pipeline.
+  `admin_update_discovery_settings` gained a fourth argument that keeps the current value when
+  omitted.
+
+Files/migrations affected: `supabase/migrations/20260921170000_editor_desk.sql`; generated database
+types; `src/lib/admin/editorial-status.ts` (new), `actions.ts`, `job-controls.ts`, `jobs.ts`,
+`discovery.ts`, `job-filters.ts`; `src/components/admin/` decision-panel, draft-preview,
+audit-checklist, step-tracker, editorial-badge, publication-controls (new) and job-controls,
+discovery-settings-form (rewritten); the dashboard, article, and settings pages; `docs/ADMIN-CONSOLE.md`,
+`docs/STATE-MACHINE.md`, `docs/SUPABASE.md`, `docs/DESIGN-SYSTEM.md`, this file.
+
+Verification performed: `pnpm db:lint` clean after the migration; 414 unit tests (12 new for the
+editorial vocabulary and the step tracker); 168 integration tests, including a new `reschedule`
+suite (publish now makes the job claimable, a moved time does not, a stale `lock_version` is
+refused with `FT002`, a non-scheduled job with `FT001`, a year-out time with `FT005`, and a viewer
+refused) and a discovery case proving auto-publish is opt-in, per-job, and left alone by later
+setting changes; 61 signed-out/design browser checks; 19 authenticated browser checks, including a
+new one that publishes a ready article from the dashboard and follows it to `VERIFIED` and a live
+200 on the public page; format, lint, typecheck, and production build pass. Screenshots at 375px
+and 1440px show no horizontal overflow on any screen.
+
+Result: Passed. Nothing about the publication boundary changed: the console still only sets a time,
+and `publish_article` remains the worker's alone.
+
+Commit/PR: the commit that adds this entry.
+
+Next action: Owner applies `20260921170000_editor_desk.sql` to production (auto mode refuses
+production writes), then uses **Publish now** on the first discovered article.
 
 ### 2026-09-21 — Discovery live; worker runs continuously
 

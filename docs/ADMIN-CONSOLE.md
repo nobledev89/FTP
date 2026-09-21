@@ -23,64 +23,137 @@ offers a sign-out. It sees exactly what an anonymous visitor sees.
 
 ## Screens
 
-| Route                     | What it is for                                                                                     |
-| ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `/admin`                  | Queue summary, stages, what is waiting on a person, failures, upcoming publications, worker health |
-| `/admin/articles/new`     | Create a job: brief, publication intent, and per-stage provider modes                              |
-| `/admin/articles/[jobId]` | One job: every artifact version, provider run, publishing log, the full timeline, and the controls |
-| `/admin/prompts`          | Prompt template versions and a preview of any one of them                                          |
-| `/admin/providers`        | The mode each stage runs in, what it costs, which workers have reported in, and their CLI sign-ins |
-| `/admin/logs`             | Provider runs, publishing and verification, and job events, filterable and paginated               |
-| `/admin/settings`         | Publication identity, editorial and SEO defaults, worker thresholds                                |
+| Route                     | What it is for                                                                                                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin`                  | The decisions waiting on you, then work in progress, what is scheduled, what is live, and the full list                                                                            |
+| `/admin/articles/new`     | Create a job: brief, publication intent, and per-stage provider modes                                                                                                              |
+| `/admin/articles/[jobId]` | One article: its state, the decisions available, and the draft as it will read; every artifact version, provider run, publishing log, and the timeline sit under Technical details |
+| `/admin/prompts`          | Prompt template versions and a preview of any one of them                                                                                                                          |
+| `/admin/providers`        | The mode each stage runs in, what it costs, which workers have reported in, and their CLI sign-ins                                                                                 |
+| `/admin/logs`             | Provider runs, publishing and verification, and job events, filterable and paginated                                                                                               |
+| `/admin/settings`         | Publication identity, editorial and SEO defaults, worker thresholds                                                                                                                |
 
 Tables and timelines page on the server. A filtered view is a URL, so it can be shared and
-bookmarked, and no screen loads an entire history into the browser.
+bookmarked, and no screen loads an entire history into the browser. The article page's two views
+are a URL too: `?view=details` opens Technical details.
+
+## What the statuses are called
+
+The database has 23 job statuses because the queue, the worker, and the audit trail need them. The
+console shows an editor six of them, derived from the exact status in
+`src/lib/admin/editorial-status.ts`:
+
+| Shown            | Means                                                            | Statuses behind it                                                                  |
+| ---------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Needs you        | Nothing moves until you decide or supply something               | `IDEA`, `FAILED`, `NEEDS_HUMAN`, any stage waiting on manual input or a CLI sign-in |
+| In progress      | The worker is researching, writing, illustrating, or checking it | The pending and active pipeline statuses, `PUBLISHING`                              |
+| Ready to publish | The audit passed and it is waiting for your decision             | `APPROVED` without auto-publish                                                     |
+| Scheduled        | It goes live by itself, at its time or on the next poll          | `SCHEDULED`, `APPROVED` with auto-publish                                           |
+| Live             | On the site                                                      | `PUBLISHED`, `VERIFIED`                                                             |
+| Stopped          | Paused, discarded, or withdrawn                                  | `PAUSED`, `DISCARDED`, a withdrawn article                                          |
+
+Each article also shows where it is along **Research → Write → Image → Check → Publish**, with the
+step it stopped at marked when it is paused, failed, escalated, or waiting for a person. The image
+step is struck through when the article asked for no image.
+
+The exact status is never hidden: it is the badge's tooltip, and it appears as its database value
+under Technical details, on `/admin/logs`, and in the timeline.
 
 ## Article controls
 
-The controls offered depend on the job's status, and mirror what `admin_transition_job` will accept:
+Every article page opens with a decision panel: the state in one sentence, the step tracker, and
+the decisions that apply now. Reversible actions are buttons; anything that needs a reason or a
+time opens its own form under the row, one at a time, so a destructive form is never on screen
+until it is asked for. The set comes from `availableControls`, which mirrors what
+`admin_transition_job` will accept:
 
-| Status                 | Controls                                        |
-| ---------------------- | ----------------------------------------------- |
-| `IDEA`                 | Start research, pause, mark needs human         |
-| Any other pausable     | Pause, mark needs human                         |
-| `APPROVED`             | Schedule publication, pause, mark needs human   |
-| `PAUSED`               | Resume                                          |
-| `FAILED`               | Retry the failed stage                          |
-| `NEEDS_HUMAN`          | Resolve to an explicit destination, with a note |
-| Running                | None: the worker owns the outcome               |
-| `PUBLISHED`/`VERIFIED` | Withdraw the article, with a reason             |
+| Status                 | Controls                                                      |
+| ---------------------- | ------------------------------------------------------------- |
+| `IDEA`                 | Start the article, pause, flag for review, discard            |
+| Any other pausable     | Pause, flag for review, discard                               |
+| `APPROVED`             | **Publish now**, schedule, pause, flag for review, discard    |
+| `SCHEDULED`            | **Publish now**, change time, pause, flag for review, discard |
+| `PAUSED`               | Resume, discard                                               |
+| `FAILED`               | Try again, discard                                            |
+| `NEEDS_HUMAN`          | Choose what happens next, discard                             |
+| Running                | None: the worker owns the outcome                             |
+| `PUBLISHED`/`VERIFIED` | Withdraw from site, with a reason                             |
 
-Approval is a resolution: an escalated job is resolved to `APPROVED`, which the database allows only
-after an audit, and only when the latest valid draft carries the latest audit.
+"Choose what happens next" is the escalation resolution: the destinations the database allows are
+offered in plain words ("Approve it as it is", "Rewrite it using the audit notes") rather than as
+status names. A note is optional in the console; when it is left empty the choice itself is
+recorded, because the database requires a note. Approval is one of those resolutions, which the
+database allows only after an audit, and only when the latest valid draft carries the latest audit.
+
+### Publishing
+
+**Publish now** is the fastest path to a live article, and needs no date typed. For an `APPROVED`
+article it schedules publication for `now()`; for a `SCHEDULED` one it moves the time to `now()`
+through `admin_reschedule_job`. Either way the worker claims it on its next poll (every
+`WORKER_POLL_INTERVAL_MS`, ten seconds by default), publishes, and then verifies the live page, so
+"now" means seconds, not instantly. Nothing is published from the browser: the console only sets
+the time, and `publish_article` stays the worker's.
+
+**Schedule** takes a wall-clock time in the publication timezone and converts it to an instant. A
+time that has passed publishes now; a time more than a year out is refused. A scheduled article can
+be moved as often as you like, from its own page or from the dashboard, until the worker claims it.
+
+The same three decisions — Publish now, Schedule, Discard — are on each dashboard card, so a ready
+article can be published without opening it.
 
 Every action carries the `lock_version` the page was rendered with. If someone else acted in between,
 the action is refused with "This job changed since the page was loaded" rather than overwriting their
-work. Escalating and resolving both require a note, which is recorded on the timeline.
+work. Escalating requires a note; resolving records the choice when no note is given. Both end up
+on the timeline.
+
+### Reading an article
+
+The **Article** view is for reading, not inspecting: the headline, standfirst, hero image, and body
+as formatted text, with the version chips when there is more than one draft. Beside it sit **The
+check** (the latest audit as a verdict, its summary, and each note with the fix it suggests),
+**About this article** (working title, type, category, web address, keywords, byline, where it came
+from), and **On the site** once it is published.
+
+The preview follows the admin type system rather than the public stylesheet ([ADR
+0004](decisions/0004-public-admin-layout-separation.md)): it shows what the article says, not a
+pixel copy of the published page. Provider Markdown is rendered with raw HTML skipped, Markdown
+images dropped, and only http(s), root-relative, and fragment links kept, the same rules the public
+renderer applies. The hero is read from the private `article-work` bucket through a short-lived
+signed URL, so an image can be judged before anything is public.
+
+**Technical details** holds what the console used to show first: state and lease, provider modes,
+research packets, sources, raw drafts, audits as stored, images, provider runs, publishing and
+verification logs, and the paged timeline.
 
 ### Discarding an article
 
-Any job that is not yet published has a **Discard article** form under Controls, with a required
-reason and a confirmation tick. The job moves to the terminal `DISCARDED` status; its drafts,
+Any article that is not yet published has a **Discard** button in its decision panel, and on its
+dashboard card while it is waiting for you. It opens a form with a required reason and a
+confirmation tick. The job moves to the terminal `DISCARDED` status; its drafts,
 audits, and timeline are kept. A stage that is running must finish (or be paused) first.
 
 ### Topic discovery and review
 
 **Settings → Topic discovery** turns automatic article discovery on or off, sets how often the
-worker scans (default every 30 minutes), whether discovered articles get a ChatGPT hero image, and
-a daily target (0–12) for each of the ten categories. **Scan now** makes the worker's next poll
+worker scans (default every 30 minutes), whether discovered articles get a ChatGPT hero image,
+whether they publish on their own, and a daily target (0–12) for each of the ten categories. **Scan now** makes the worker's next poll
 scan immediately; daily targets still apply. **Recent scans** lists the last ten scans with what
 they found, what they created, and any error.
 
 Discovered articles run research, writing, image, and audit unattended on the worker PC and then
-wait on the dashboard under **Ready for review**, with the news story they came from. Open one to
-read the draft, then **Schedule publication** for the time you want, or discard it. Discovered
-articles never publish on their own.
+wait on the dashboard under **Needs your decision**, with the news story they came from. Read the
+draft, then publish it, schedule it, or discard it.
+
+**Publish discovered articles automatically** (off by default) changes that last step: an article
+that passes its audit goes live without an editor, appearing under Scheduled and then Live instead
+of waiting. It can still be withdrawn afterwards. The setting is copied onto each article when it
+is discovered, so turning it off leaves articles already in the pipeline alone, and turning it on
+does not release articles that are already waiting.
 
 ### Withdrawing an article
 
-An owner or editor can take a live article down from the **Published article** panel. It needs a
-reason (3–500 characters, recorded on the timeline as `article.withdrawn`) and a confirmation tick.
+An owner or editor can take a live article down with **Withdraw from site** in the decision panel.
+It needs a reason (3–500 characters, recorded on the timeline as `article.withdrawn`) and a confirmation tick.
 `admin_withdraw_article` marks the snapshot `withdrawn`, cancels a pending or exhausted verification
 so the worker never re-checks it, and refuses while a verification lease is live ("try again in a
 minute"). The action then expires the public cache tags, so the article page, its earlier slugs, the

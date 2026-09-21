@@ -1245,6 +1245,7 @@ export type Database = {
           created_at: string
           default_byline_name: string
           default_byline_role: string | null
+          discovery_auto_publish: boolean
           discovery_enabled: boolean
           discovery_image_count: number
           discovery_interval_minutes: number
@@ -1266,6 +1267,7 @@ export type Database = {
           created_at?: string
           default_byline_name?: string
           default_byline_role?: string | null
+          discovery_auto_publish?: boolean
           discovery_enabled?: boolean
           discovery_image_count?: number
           discovery_interval_minutes?: number
@@ -1287,6 +1289,7 @@ export type Database = {
           created_at?: string
           default_byline_name?: string
           default_byline_role?: string | null
+          discovery_auto_publish?: boolean
           discovery_enabled?: boolean
           discovery_image_count?: number
           discovery_interval_minutes?: number
@@ -1646,6 +1649,17 @@ export type Database = {
         }[]
       }
       admin_request_discovery_scan: { Args: never; Returns: undefined }
+      admin_reschedule_job: {
+        Args: {
+          p_desired_publish_at?: string
+          p_expected_lock_version: number
+          p_job_id: string
+        }
+        Returns: {
+          desired_publish_at: string
+          lock_version: number
+        }[]
+      }
       admin_transition_job: {
         Args: {
           p_action: string
@@ -1662,6 +1676,7 @@ export type Database = {
       }
       admin_update_discovery_settings: {
         Args: {
+          p_auto_publish?: boolean
           p_enabled: boolean
           p_image_count: number
           p_interval_minutes: number

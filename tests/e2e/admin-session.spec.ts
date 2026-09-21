@@ -50,6 +50,7 @@ const createdUserIds: string[] = [];
 let jobId: string | null = null;
 let originalByline: string | null = null;
 let publishedSlug: string | null = null;
+let publishedJobId: string | null = null;
 
 async function createUser(email: string): Promise<string> {
   const { data, error } = await service.auth.admin.createUser({
@@ -249,19 +250,25 @@ test.describe("authenticated admin console", () => {
     expect(jobId).not.toBeNull();
 
     await expect(page.getByRole("heading", { level: 1, name: topic })).toBeVisible();
-    await expect(page.getByText("IDEA").first()).toBeVisible();
+    await expect(page.getByText("Needs you").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Not started yet." })).toBeVisible();
+    await page.getByRole("link", { name: "Technical details" }).click();
     await expect(page.getByText("job.created")).toBeVisible();
+    await expect(page.getByText("IDEA").first()).toBeVisible();
   });
 
   test("runs the admin transitions the status allows", async ({ page }) => {
     await signIn(page, ownerEmail, /\/admin$/);
 
     await page.goto(`/admin/articles/${jobId}`);
-    await page.getByRole("button", { name: "Start research" }).click();
+    await page.getByRole("button", { name: "Start the article" }).click();
     await expect(page.getByRole("status")).toHaveText("Job started.");
 
     await page.reload();
-    await expect(page.getByText("RESEARCH_PENDING").first()).toBeVisible();
+    await expect(page.getByText("In progress").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Waiting for the worker to start researching/ }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     await expect(page.getByRole("status")).toHaveText("Job paused.");
@@ -409,6 +416,7 @@ test.describe("authenticated admin console", () => {
 
     expect(status).toBe("VERIFIED");
     expect(publishedSlug).toBeTruthy();
+    publishedJobId = publicJobId;
     const response = await page.goto(`/blog/${publishedSlug}`);
     expect(response?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
@@ -563,6 +571,7 @@ test.describe("authenticated admin console", () => {
 
     await signIn(page, ownerEmail, /\/admin$/);
     await page.goto(`/admin/articles/${withdrawnJobId}`);
+    await page.getByRole("button", { name: "Withdraw from site" }).click();
     const withdraw = page.getByRole("button", { name: "Withdraw article" });
     await expect(withdraw).toBeVisible();
 
@@ -575,9 +584,11 @@ test.describe("authenticated admin console", () => {
     await page.getByLabel("I understand this takes the article off the public site.").check();
     await withdraw.click();
     await expect(page.getByText("and its earlier addresses now return 404")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Withdraw article" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Withdraw from site" })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText("withdrawn").first()).toBeVisible();
+    await expect(page.getByText("Stopped").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Withdrawn from the site." })).toBeVisible();
+    await page.goto(`/admin/articles/${withdrawnJobId}?view=details`);
     await expect(page.getByText("article.withdrawn")).toBeVisible();
     await expect(page.getByText("Superseded by a corrected explainer.")).toBeVisible();
 
@@ -624,22 +635,107 @@ test.describe("authenticated admin console", () => {
     );
 
     await signIn(page, ownerEmail, /\/admin$/);
-    const review = page.getByRole("heading", { name: /Ready for review/ });
+    const review = page.getByRole("heading", { name: /Needs your decision/ });
     await expect(review).toBeVisible();
-    // It is also listed under Upcoming, which shows every approved job; Ready for review comes first.
-    await page.getByRole("link", { name: reviewTopic }).first().click();
+    // The card is headed by the draft's own headline, so find it by the article it links to.
+    const card = page.locator(`article:has(a[href="/admin/articles/${reviewJobId}"])`);
+    await expect(card.getByText("Ready to publish")).toBeVisible();
+    await expect(card.getByRole("button", { name: "Publish now" })).toBeVisible();
+    await card.getByRole("link", { name: "Read it" }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/articles/${reviewJobId}$`));
 
+    await page.getByRole("button", { name: "Discard", exact: true }).click();
     await page.getByLabel("Reason for discarding").fill("Not strong enough for publication.");
     await page.getByLabel("I understand a discarded article cannot be restored.").check();
     await page.getByRole("button", { name: "Discard article" }).click();
-    await expect(page.getByText("DISCARDED").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Discard article" })).toHaveCount(0);
-    await page.reload();
+    await expect(page.getByText("Stopped").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Discard", exact: true })).toHaveCount(0);
+    await page.goto(`/admin/articles/${reviewJobId}?view=details`);
     await expect(page.getByText("job.discarded")).toBeVisible();
 
+    // It leaves the decisions inbox, and stays in the full list as a stopped article.
     await page.goto("/admin");
-    await expect(page.getByRole("link", { name: reviewTopic })).toHaveCount(0);
+    await expect(page.locator(`article:has(a[href="/admin/articles/${reviewJobId}"])`)).toHaveCount(
+      0,
+    );
+    const row = page.locator(`li:has(a[href="/admin/articles/${reviewJobId}"])`);
+    await expect(row.getByText("Stopped")).toBeVisible();
+  });
+
+  test("publishes a ready article straight from the dashboard", async ({ page, request }) => {
+    const publishTopic = `Publish now check ${randomUUID().slice(0, 8)}`;
+    const editor = createClient<Database>(supabaseUrl as string, publishableKey as string, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    expect(
+      (await editor.auth.signInWithPassword({ email: ownerEmail, password: PASSWORD })).error,
+    ).toBeNull();
+    const job = await editor.rpc("create_article_job", {
+      p_topic: publishTopic,
+      p_keywords: ["payments", "uk"],
+      p_image_count: 0,
+      p_auto_publish: false,
+      p_research_mode: "mock",
+      p_writing_mode: "mock",
+      p_images_mode: "mock",
+      p_audit_mode: "mock",
+    });
+    if (job.error || !job.data) throw job.error ?? new Error("job creation failed");
+    const publishJobId = job.data;
+    const started = await editor.rpc("admin_transition_job", {
+      p_job_id: publishJobId,
+      p_action: "start",
+      p_expected_lock_version: 0,
+    });
+    if (started.error) throw started.error;
+
+    const runner = workerRunner("e2e-publish-now-worker");
+    await runWorkerUntil(runner, publishJobId, (state) => state.status === "APPROVED");
+
+    // One click on the card, with no date to type: the article is queued for immediate release.
+    await signIn(page, ownerEmail, /\/admin$/);
+    const card = page.locator(`article:has(a[href="/admin/articles/${publishJobId}"])`);
+    await card.getByRole("button", { name: "Publish now" }).click();
+    await expect
+      .poll(async () => {
+        const state = await service
+          .from("article_jobs")
+          .select("status, desired_publish_at")
+          .eq("id", publishJobId)
+          .single();
+        return state.data?.status;
+      })
+      .toBe("SCHEDULED");
+    const scheduled = await service
+      .from("article_jobs")
+      .select("desired_publish_at")
+      .eq("id", publishJobId)
+      .single();
+    expect(Date.parse(scheduled.data!.desired_publish_at!)).toBeLessThanOrEqual(Date.now());
+
+    // The worker then takes it live without anything else being asked of the editor.
+    const final = await runWorkerUntil(
+      runner,
+      publishJobId,
+      (state) => state.status === "VERIFIED",
+    );
+    expect(final.status).toBe("VERIFIED");
+
+    const published = await service
+      .from("article_jobs")
+      .select("article_id")
+      .eq("id", publishJobId)
+      .single();
+    const article = await service
+      .from("articles")
+      .select("slug")
+      .eq("id", published.data!.article_id!)
+      .single();
+    expect((await request.get(`/blog/${article.data!.slug}`)).status()).toBe(200);
+
+    await page.goto(`/admin/articles/${publishJobId}`);
+    await expect(page.getByText("Live", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Live on the site." })).toBeVisible();
   });
 
   test("configures topic discovery per category and requests a scan", async ({ page }) => {
@@ -652,6 +748,22 @@ test.describe("authenticated admin console", () => {
     await page.getByLabel("Find and write articles automatically").check();
     await page.getByLabel("Payments articles per day").fill("2");
     await page.getByLabel("Open Banking articles per day").fill("1");
+    await page.getByLabel("Publish discovered articles automatically").check();
+    await page.getByRole("button", { name: "Save discovery settings" }).click();
+    await expect(
+      page.getByText(
+        "Discovery is on: up to 3 articles a day, published as soon as each passes its check.",
+      ),
+    ).toBeVisible();
+
+    const autoPublish = await service
+      .from("site_settings")
+      .select("discovery_auto_publish")
+      .single();
+    expect(autoPublish.data?.discovery_auto_publish).toBe(true);
+
+    // Back to waiting for an editor, which is the default.
+    await page.getByLabel("Publish discovered articles automatically").uncheck();
     await page.getByRole("button", { name: "Save discovery settings" }).click();
     await expect(page.getByText("Discovery is on: up to 3 articles a day.")).toBeVisible();
 
@@ -782,7 +894,7 @@ test.describe("authenticated admin console", () => {
     await page.getByRole("button", { name: "Create article job" }).click();
     await expect(page).toHaveURL(/\/admin\/articles\/[0-9a-f-]{36}$/);
     const manualJobId = new URL(page.url()).pathname.split("/").pop() as string;
-    await page.getByRole("button", { name: "Start research" }).click();
+    await page.getByRole("button", { name: "Start the article" }).click();
     await expect(page.getByRole("status")).toHaveText("Job started.");
 
     // The mock builders stand in for what an operator pastes back from each provider: they
@@ -962,6 +1074,8 @@ test.describe("authenticated admin console", () => {
     expect(image.data!.byte_size).toBeGreaterThan(4_500_000);
 
     await page.reload();
+    await expect(page.getByText("Live", { exact: true }).first()).toBeVisible();
+    await page.goto(`/admin/articles/${manualJobId}?view=details`);
     await expect(page.getByText("VERIFIED").first()).toBeVisible();
     await expect(page.getByText("manual.image_imported")).toBeVisible();
   });
@@ -1012,7 +1126,14 @@ test.describe("admin console review screenshots", () => {
       await page.setViewportSize({ width, height: 900 });
       await signIn(page, ownerEmail, /\/admin$/);
 
-      for (const screen of [...screens, { name: "article", path: `/admin/articles/${jobId}` }]) {
+      // Two article states: one still in the pipeline, and one live with its draft, image, and
+      // check, which is what the reading view is for.
+      for (const screen of [
+        ...screens,
+        { name: "article", path: `/admin/articles/${jobId}` },
+        { name: "article-live", path: `/admin/articles/${publishedJobId}` },
+        { name: "article-details", path: `/admin/articles/${publishedJobId}?view=details` },
+      ]) {
         await page.goto(screen.path);
         await page.evaluate(() => document.fonts.ready);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

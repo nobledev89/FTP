@@ -92,7 +92,7 @@ export default async function SettingsPage() {
 
         {discovery ? (
           <Panel
-            description="Finds real, recent news for each category and writes the articles on the worker PC. Every article waits for you to schedule or discard it."
+            description="Finds real, recent news for each category and writes the articles on the worker PC. Unless you turn on automatic publishing, every article waits on the dashboard for you."
             title="Topic discovery"
           >
             <DiscoverySettingsForm
@@ -104,6 +104,7 @@ export default async function SettingsPage() {
                 dailyTarget: category.daily_target,
                 createdToday: category.createdToday,
               }))}
+              autoPublish={discovery.settings.discovery_auto_publish}
               enabled={discovery.settings.discovery_enabled}
               imageCount={discovery.settings.discovery_image_count}
               intervalMinutes={discovery.settings.discovery_interval_minutes}

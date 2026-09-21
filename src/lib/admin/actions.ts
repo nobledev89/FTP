@@ -24,6 +24,7 @@ import {
 import type { ActionResult } from "./action-result";
 import { listProviderSettings } from "./configuration";
 import { IMPLEMENTED_MODES, isImplementedMode, type SelectableStage } from "./provider-modes";
+import { resolutionChoiceLabel } from "./editorial-status";
 import { providerModeLabel } from "./status-display";
 
 /**
@@ -353,17 +354,16 @@ export async function jobTransitionAction(
         await workflow.markNeedsHuman(command.jobId, command.expectedLockVersion, command.note);
         break;
       case "resolve":
-        if (!command.note) {
-          return { ok: false, error: "Resolving requires a note recording the decision." };
-        }
         if (!command.toStatus) {
-          return { ok: false, error: "Choose where the job should continue from." };
+          return { ok: false, error: "Choose what should happen next." };
         }
+        // The database records a note with every resolution. When the editor adds none, the
+        // choice itself is the record.
         await workflow.resolve(
           command.jobId,
           command.expectedLockVersion,
           command.toStatus,
-          command.note,
+          command.note || `Editor chose: ${resolutionChoiceLabel(command.toStatus)}.`,
         );
         break;
       case "schedule":
@@ -374,6 +374,143 @@ export async function jobTransitionAction(
     revalidatePath("/admin");
     revalidatePath(`/admin/articles/${command.jobId}`);
     return { ok: true, message: ACTION_LABELS[command.action] };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Publication timing
+// ---------------------------------------------------------------------------
+
+const publicationFormSchema = z.object({
+  jobId: uuidSchema,
+  expectedLockVersion: z.coerce.number().int().nonnegative(),
+});
+
+const SCHEDULE_HORIZON_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Sets when a ready or scheduled article goes live; `null` means now. An APPROVED job is scheduled
+ * through `admin_transition_job`, and a SCHEDULED one is moved through `admin_reschedule_job`.
+ * Either way the job is SCHEDULED afterwards and the worker claims it once the time arrives, so a
+ * time of now is picked up on the worker's next poll.
+ */
+async function setPublicationTime(
+  jobId: string,
+  expectedLockVersion: number,
+  publishAt: string | null,
+): Promise<ActionResult | null> {
+  const client = await createSupabaseServerClient();
+  const jobResult = await client
+    .from("article_jobs")
+    .select("status, lock_version")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (jobResult.error) throw jobResult.error;
+  if (!jobResult.data) return { ok: false, error: "That job no longer exists." };
+  if (jobResult.data.lock_version !== expectedLockVersion) {
+    return {
+      ok: false,
+      error: "This job changed since the page was loaded. Reload it and try again.",
+    };
+  }
+
+  if (jobResult.data.status === "APPROVED") {
+    await createAdminWorkflowService(client).schedule(
+      jobId,
+      expectedLockVersion,
+      publishAt ?? undefined,
+    );
+  } else if (jobResult.data.status === "SCHEDULED") {
+    const { error } = await client.rpc("admin_reschedule_job", {
+      p_job_id: jobId,
+      p_expected_lock_version: expectedLockVersion,
+      ...(publishAt ? { p_desired_publish_at: publishAt } : {}),
+    });
+    if (error) throw error;
+  } else {
+    return {
+      ok: false,
+      error: "Only an article that is ready or scheduled can be published. Reload the page.",
+    };
+  }
+  return null;
+}
+
+/** Publishes a ready or scheduled article as soon as the worker next polls. */
+export async function publishNowAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const parsed = publicationFormSchema.safeParse({
+      jobId: formData.get("jobId"),
+      expectedLockVersion: formData.get("expectedLockVersion"),
+    });
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+
+    const refused = await setPublicationTime(
+      parsed.data.jobId,
+      parsed.data.expectedLockVersion,
+      null,
+    );
+    if (refused) return refused;
+
+    revalidatePath("/admin");
+    revalidatePath(`/admin/articles/${parsed.data.jobId}`);
+    return {
+      ok: true,
+      message: "Publishing now. It goes live within a minute, then the site checks it.",
+    };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
+/** Schedules a ready article, or moves a scheduled one, to a wall-clock time in the site timezone. */
+export async function schedulePublicationAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await authorizeAdminAction("write");
+    const parsed = publicationFormSchema
+      .extend({ desiredPublishAt: z.string().trim().max(40) })
+      .safeParse({
+        jobId: formData.get("jobId"),
+        expectedLockVersion: formData.get("expectedLockVersion"),
+        desiredPublishAt: String(formData.get("desiredPublishAt") ?? ""),
+      });
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+    if (parsed.data.desiredPublishAt.length === 0) {
+      return { ok: false, error: "Choose a date and time, or use Publish now." };
+    }
+    const publishAt = zonedLocalToUtcIso(parsed.data.desiredPublishAt, siteConfig.timeZone);
+    if (!publishAt) {
+      return { ok: false, error: "Enter the publication time as a date and time." };
+    }
+    if (Date.parse(publishAt) - Date.now() > SCHEDULE_HORIZON_MS) {
+      return { ok: false, error: "Choose a time within the next year." };
+    }
+
+    const refused = await setPublicationTime(
+      parsed.data.jobId,
+      parsed.data.expectedLockVersion,
+      publishAt,
+    );
+    if (refused) return refused;
+
+    revalidatePath("/admin");
+    revalidatePath(`/admin/articles/${parsed.data.jobId}`);
+    return {
+      ok: true,
+      message:
+        Date.parse(publishAt) <= Date.now()
+          ? "That time has passed, so it is publishing now."
+          : "Publication scheduled.",
+    };
   } catch (error) {
     return { ok: false, error: describe(error) };
   }
@@ -516,6 +653,7 @@ const discoverySettingsSchema = z.object({
   enabled: z.boolean(),
   intervalMinutes: z.coerce.number().int().min(15).max(720),
   imageCount: z.coerce.number().int().min(0).max(1),
+  autoPublish: z.boolean(),
   targets: z.array(
     z.object({ categoryId: uuidSchema, dailyTarget: z.coerce.number().int().min(0).max(12) }),
   ),
@@ -541,6 +679,7 @@ export async function updateDiscoverySettingsAction(
       enabled: formData.get("enabled") === "on",
       intervalMinutes: formData.get("intervalMinutes"),
       imageCount: formData.get("imageCount"),
+      autoPublish: formData.get("autoPublish") === "on",
       targets,
     });
     if (!parsed.success) {
@@ -559,6 +698,7 @@ export async function updateDiscoverySettingsAction(
       p_enabled: parsed.data.enabled,
       p_interval_minutes: parsed.data.intervalMinutes,
       p_image_count: parsed.data.imageCount,
+      p_auto_publish: parsed.data.autoPublish,
     });
     if (error) throw error;
     for (const target of parsed.data.targets) {
@@ -574,7 +714,9 @@ export async function updateDiscoverySettingsAction(
     return {
       ok: true,
       message: parsed.data.enabled
-        ? `Discovery is on: up to ${total} article${total === 1 ? "" : "s"} a day.`
+        ? `Discovery is on: up to ${total} article${total === 1 ? "" : "s"} a day${
+            parsed.data.autoPublish ? ", published as soon as each passes its check" : ""
+          }.`
         : "Discovery settings saved. Discovery is off.",
     };
   } catch (error) {

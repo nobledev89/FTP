@@ -63,6 +63,7 @@ describe("migrations", () => {
       { role: "authenticated", name: "admin_import_manual_image" },
       { role: "authenticated", name: "admin_import_manual_result" },
       { role: "authenticated", name: "admin_request_discovery_scan" },
+      { role: "authenticated", name: "admin_reschedule_job" },
       { role: "authenticated", name: "admin_transition_job" },
       { role: "authenticated", name: "admin_update_discovery_settings" },
       { role: "authenticated", name: "admin_update_provider_setting" },

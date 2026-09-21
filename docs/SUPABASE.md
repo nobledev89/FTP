@@ -44,6 +44,14 @@ Migrations run in order:
 | `20260918150000_api_provider_modes.sql`          | Enables stage-specific API defaults only with recorded metered-cost confirmation                                                                                   |
 | `20260921100000_publishing_hardening.sql`        | Schedule horizon, revalidation logs, bounded verification retries                                                                                                  |
 | `20260921110000_direct_manual_image_uploads.sql` | Limits editor Storage inserts to the current manual image job/run/slot for direct uploads                                                                          |
+| `20260921120000_article_withdrawal.sql`          | `admin_withdraw_article`: takes a live article off the site and cancels its verification                                                                           |
+| `20260921130000_codex_image_mode.sql`            | `codex_image` provider mode for the images stage                                                                                                                   |
+| `20260921130100_codex_image_mode_rules.sql`      | Mode rules and console selection for `codex_image`                                                                                                                 |
+| `20260921140000_discarded_status.sql`            | Terminal `DISCARDED` status and its transitions                                                                                                                    |
+| `20260921140100_discard_job.sql`                 | `admin_discard_job`: turns down an unpublished article with a required reason                                                                                      |
+| `20260921150000_topic_discovery.sql`             | Topic categories, discovery settings and runs, job provenance, worker discovery functions                                                                          |
+| `20260921160000_seed_topic_discovery_prompt.sql` | Seeds the `topic-discovery` prompt on databases created before it                                                                                                  |
+| `20260921170000_editor_desk.sql`                 | `admin_reschedule_job` (publish now or move a scheduled time) and opt-in auto-publish for discovered articles                                                      |
 
 Design rules enforced by the database:
 
