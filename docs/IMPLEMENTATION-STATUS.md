@@ -9,11 +9,11 @@ This is the authoritative live record of implementation progress. Update it imme
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
 | Current task           | Provision hosted Supabase and connect the existing Vercel deployment to it. |
-| Last updated           | 2026-09-21 12:00, Asia/Singapore                                     |
+| Last updated           | 2026-09-21 13:00, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
-| Active blockers        | Hosted Supabase needs an owner-created project and `supabase login`. The production Vercel deployment at `fintechpulse.co.uk` has no Supabase variables yet. |
-| Next action            | Link the hosted Supabase project, push migrations, then set the Vercel variables and run the production smoke checks. |
+| Active blockers        | Hosted Supabase (`vobxocvjsdkcabhbdvvv`, eu-west-1) is migrated and seeded; Auth settings and the first owner are set in the dashboard by the owner. The production Vercel deployment has no Supabase variables yet. |
+| Next action            | Owner configures Auth and bootstraps the first owner, then sets the four Vercel variables and redeploys; then run the production smoke checks. |
 
 ## Status legend
 
@@ -325,6 +325,38 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Hosted Supabase migrated and seeded
+
+Date/time: 2026-09-21 13:00, Asia/Singapore
+
+Phase/task: Phase 12 — provision hosted Supabase
+
+Status change: Phase 12 remains `IN_PROGRESS`.
+
+What changed: Linked the owner-created project `fintechpulse` (`vobxocvjsdkcabhbdvvv`, West EU
+Ireland `eu-west-1`, Postgres 17.6). A dry run listed all 15 migrations and both seed files against
+an empty database; the owner then ran `supabase db push --include-seed` (auto mode refuses
+production database writes from the agent).
+
+Files/migrations affected: None in the repository. Hosted: 15 migrations, `seed.sql`,
+`seeds/prompts.sql`.
+
+Verification performed: `supabase migration list --linked` shows all 15 local and remote versions
+matching. A read-only query shows 1 site (`https://fintechpulse.co.uk`), 1 site-settings row, 7
+provider settings, 6 prompt templates, 0 admin users, and buckets `article-public` (public) and
+`article-work` (private). `supabase db advisors --linked` reports no errors: 11
+`authenticated_security_definer_function_executable` warnings for the admin RPCs (intentional
+explicit grants; each function re-authorizes admin membership and role, covered by the RLS and
+admin-console integration suites) and 1 `multiple_permissive_policies` performance warning on
+`articles` (admin read plus public read; accepted at this scale).
+
+Result: Passed. The hosted schema matches the repository.
+
+Commit/PR: Recorded in the commit that adds this entry.
+
+Next action: Owner sets Auth (sign-up off, 12-character minimum, site URL and redirects), creates
+and bootstraps the first owner, and adds the four Vercel variables.
 
 ### 2026-09-21 — Phase 1 owner design sign-off; production domain already live
 
