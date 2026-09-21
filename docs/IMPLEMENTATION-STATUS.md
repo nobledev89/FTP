@@ -68,9 +68,10 @@ This is the authoritative live record of implementation progress. Update it imme
       auto-publish for discovered articles.
 - [x] Rewrite the image art direction around a screenprinted editorial-illustration house style
       and add hero image replacement for live articles (migration, worker lane, console panel).
-- [ ] Apply the discovery prompt, editor-desk, illustration-prompt, and hero-replacement migrations,
-      set category targets, and take the first discovered article through review to `VERIFIED` on
-      production.
+- [x] Apply the discovery prompt, editor-desk, illustration-prompt, and hero-replacement
+      migrations to production.
+- [ ] Set category targets and take the first discovered article through review to `VERIFIED` on
+      production, and regenerate one live hero image end to end.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -406,9 +407,19 @@ drawn candidate, an applied one, a refusal for a stage that cannot draw unattend
 failure recorded against the replacement rather than the queue); format, lint, typecheck, and
 production build pass.
 
-Result: Passed for the prompt rewrite and the replacement machinery, on the local stack only. No
-image has been regenerated against a real provider end to end, and both migrations are unapplied on
-the hosted database.
+Result: Passed for the prompt rewrite and the replacement machinery.
+
+Deployed the same day: `supabase db push --linked` applied both migrations to `vobxocvjsdkcabhbdvvv`
+after a dry run listing only those two, and a follow-up dry run reports the remote up to date; commit
+`7ebdb2e` is on `main` for Vercel. The dry run also confirmed the discovery-prompt and editor-desk
+migrations were already applied, which the checklist above had wrong.
+
+Still unproven: no image has been drawn or swapped against a real provider, so the house style and
+the replacement lane are untested outside the local stack. The worker was found stopped
+(`FinTechPulse Worker` last ran 14:41 and exited on a console break), and it must be running for a
+replacement to be drawn or applied at all. The seed hash on the remote was deliberately left
+untouched — the migration carries the new prompt bodies, so `--include-seed` was not passed and the
+recorded hash still refers to the previous seed file.
 
 ### 2026-09-21 — The editor's desk: publish now, readable drafts, plain statuses
 
