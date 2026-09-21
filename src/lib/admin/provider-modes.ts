@@ -14,7 +14,7 @@ export type SelectableStage = "research" | "draft" | "images" | "audit";
 export const IMPLEMENTED_MODES: Readonly<Record<SelectableStage, readonly ProviderMode[]>> = {
   research: ["mock", "manual_chatgpt", "codex_cli", "openai_api"],
   draft: ["mock", "manual_claude", "claude_code", "anthropic_api"],
-  images: ["mock", "manual_gemini", "gemini_api"],
+  images: ["mock", "manual_gemini", "codex_image", "gemini_api"],
   audit: ["mock", "manual_chatgpt", "codex_cli", "openai_api"],
 };
 

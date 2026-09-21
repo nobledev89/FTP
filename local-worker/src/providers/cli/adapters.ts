@@ -18,10 +18,12 @@ import type {
 } from "../contract.js";
 import { MockAuditAdapter, type AuditStageInput } from "../mock/audit.js";
 import { MockDraftAdapter, MockRevisionAdapter, type DraftStageInput } from "../mock/draft.js";
+import type { ImageStageInput, ImageStageOutput } from "../mock/images.js";
 import { MockResearchAdapter, type ResearchStageInput } from "../mock/research.js";
 import type { CliMode, StructuredCli } from "./base.js";
 import { ClaudeCodeCli, type ClaudeCodeSettings } from "./claude-code.js";
 import { CodexCli, type CodexSettings } from "./codex.js";
+import { CodexImagesAdapter } from "./codex-images.js";
 import { CliProviderError } from "./errors.js";
 import type { CliRuntimeOptions } from "./base.js";
 import { providerJsonSchema } from "./structured-output.js";
@@ -95,6 +97,7 @@ export type CliAdapterSet = Readonly<{
   research: StageAdapter<ResearchStageInput, ResearchPacketOutput>;
   draft: StageAdapter<DraftStageInput, DraftOutput>;
   revision: StageAdapter<DraftStageInput, DraftOutput>;
+  images: StageAdapter<ImageStageInput, ImageStageOutput>;
   audit: StageAdapter<AuditStageInput, AuditOutput>;
   clis: readonly StructuredCli[];
 }>;
@@ -105,7 +108,10 @@ export type CliSettings = Readonly<{
   runtime: CliRuntimeOptions;
 }>;
 
-/** Claude Code writes and revises; Codex researches and audits (plan section 10.2). */
+/**
+ * Claude Code writes and revises; Codex researches, audits, and draws ChatGPT images (plan
+ * section 10.2).
+ */
 export function createCliAdapters(settings: CliSettings): CliAdapterSet {
   const claude = new ClaudeCodeCli(settings.claude, settings.runtime);
   const codex = new CodexCli(settings.codex, settings.runtime);
@@ -134,6 +140,7 @@ export function createCliAdapters(settings: CliSettings): CliAdapterSet {
       claude,
       draftOutputSchema,
     ),
+    images: new CodexImagesAdapter(codex),
     audit: new CliTextAdapter(
       "audit",
       "codex_cli",

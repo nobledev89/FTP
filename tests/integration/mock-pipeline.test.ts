@@ -1152,6 +1152,25 @@ describe("prompt versions", () => {
       { updated_stage: "draft", updated_mode: "claude_code" },
       { updated_stage: "revision", updated_mode: "claude_code" },
     ]);
+    // ChatGPT images through Codex are a subscription mode for the images stage only: no API
+    // confirmation, and no other stage accepts them.
+    const codexImages = await unwrap(
+      editor.client.rpc("admin_update_provider_setting", {
+        p_stage: "images",
+        p_mode: "codex_image",
+        p_confirm_api: false,
+      }),
+    );
+    expect(codexImages).toEqual([{ updated_stage: "images", updated_mode: "codex_image" }]);
+    const misplaced = await editor.client.rpc("admin_update_provider_setting", {
+      p_stage: "research",
+      p_mode: "codex_image",
+      p_confirm_api: false,
+    });
+    expect(misplaced.error?.code).toBe("22023");
+    const codexImageJob = await createJob(editor, { imageCount: 1, imagesMode: "codex_image" });
+    expect((await jobRow(codexImageJob)).images_mode).toBe("codex_image");
+
     for (const [stage, mode] of [
       ["research", "openai_api"],
       ["draft", "anthropic_api"],

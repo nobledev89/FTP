@@ -18,6 +18,7 @@ export const providerModeSchema = z.enum([
   "manual_claude",
   "anthropic_api",
   "manual_gemini",
+  "codex_image",
   "gemini_api",
   "internal",
 ]);

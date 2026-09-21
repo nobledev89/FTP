@@ -38,7 +38,7 @@ const STAGE_OPTIONS: ReadonlyArray<Omit<StageChoice, "defaultMode" | "defaultAva
     stage: "images",
     field: "imagesMode",
     label: "Images",
-    options: ["mock", "manual_gemini", "gemini_api"],
+    options: ["mock", "manual_gemini", "codex_image", "gemini_api"],
   },
   {
     stage: "audit",

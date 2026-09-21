@@ -27,6 +27,8 @@ const MODE_NOTES: Readonly<Record<string, string>> = {
   manual_gemini: "You generate the image in Gemini and upload it. Subscription.",
   codex_cli:
     "Runs Codex on the worker PC with its ChatGPT sign-in. Research gets live web search; audit gets none. Subscription.",
+  codex_image:
+    "Codex generates the image with ChatGPT image generation on the worker PC's ChatGPT sign-in. No watermark. Subscription.",
   claude_code:
     "Runs Claude Code on the worker PC with its Claude sign-in, with no tools. Subscription.",
   openai_api: "Metered OpenAI API calls. Billed per request.",

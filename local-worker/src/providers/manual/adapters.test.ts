@@ -78,7 +78,12 @@ describe("manual provider adapters", () => {
       "claude_code",
       "anthropic_api",
     ]);
-    expect(implementedModes("images")).toEqual(["mock", "manual_gemini", "gemini_api"]);
+    expect(implementedModes("images")).toEqual([
+      "mock",
+      "manual_gemini",
+      "codex_image",
+      "gemini_api",
+    ]);
     // Configured adapters must be supplied explicitly; no unavailable mode is substituted.
     expect(() => resolveAdapter("draft", "claude_code")).toThrow(UnsupportedModeError);
     expect(() => resolveAdapter("research", "openai_api")).toThrow(UnsupportedModeError);

@@ -83,6 +83,7 @@ const PROVIDER_MODE_LABELS = {
   manual_claude: "Manual Claude",
   anthropic_api: "Anthropic API",
   manual_gemini: "Manual Gemini",
+  codex_image: "ChatGPT images (Codex)",
   gemini_api: "Gemini API",
   internal: "Internal",
 } as const satisfies Record<Enums["provider_mode"], string>;

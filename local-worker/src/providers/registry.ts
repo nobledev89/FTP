@@ -86,8 +86,8 @@ export function resolveAdapter<S extends AdapterStage>(
   if (mode === "mock") return MOCK_ADAPTERS[stage];
   const manual = MANUAL_ADAPTERS[stage];
   if (manual?.mode === mode) return manual as AdapterMap[S];
-  if (cli && stage !== "images") {
-    const adapter = cli[stage as Exclude<AdapterStage, "images">];
+  if (cli) {
+    const adapter = cli[stage];
     if (adapter.mode === mode) return adapter as AdapterMap[S];
   }
   if (api) {
@@ -110,7 +110,7 @@ export function implementedModes(stage: PipelineStage): readonly ProviderMode[] 
     case "revision":
       return ["mock", "manual_claude", "claude_code", "anthropic_api"];
     case "images":
-      return ["mock", "manual_gemini", "gemini_api"];
+      return ["mock", "manual_gemini", "codex_image", "gemini_api"];
     default:
       return ["internal"];
   }

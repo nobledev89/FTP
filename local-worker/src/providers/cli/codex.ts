@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 
 import type { Json } from "../../db/database.types.js";
@@ -82,6 +83,69 @@ export class CodexCli extends SubscriptionCli {
     return interpretCodexAuth(run);
   }
 
+  /**
+   * Generates one image with Codex's built-in image tool on the ChatGPT subscription.
+   *
+   * `codex exec` has no option to name an output file, and the read-only sandbox (rightly) stops
+   * the agent from copying one anywhere. Codex itself saves every generated image under
+   * `<CODEX_HOME>/generated_images/<thread id>/`, and the thread id is the first JSONL event, so
+   * the worker reads the file from there and then deletes that run's folder. Web search is off:
+   * the brief is already fixed by the approved draft.
+   */
+  async generateImage(request: ImageRequest): Promise<GeneratedImage> {
+    const version = await this.ensureReady(request.signal);
+    const command = this.command();
+
+    return this.withScratchDirectory(async (directory) => {
+      const workspace = path.join(directory, "workspace");
+      await mkdir(workspace);
+      const run = await this.exec(
+        command,
+        [
+          "exec",
+          "--ignore-user-config",
+          "--strict-config",
+          "--ignore-rules",
+          "--ephemeral",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "--color",
+          "never",
+          "--json",
+          "--cd",
+          workspace,
+          "-c",
+          'web_search="disabled"',
+          "-",
+        ],
+        { stdin: request.prompt, cwd: directory, signal: request.signal },
+      );
+      const fail: FailureFactory = (message, errorClass, detail) =>
+        this.failure(message, errorClass, detail);
+      const { threadId, usage } = interpretCodexImageRun(run, version, fail);
+
+      const folder = path.join(this.codexHome(), "generated_images", threadId);
+      try {
+        const file = await newestImage(folder);
+        if (!file) {
+          throw fail("Codex finished without generating an image", "invalid_output", run.stderr);
+        }
+        const bytes = new Uint8Array(await readFile(file.path));
+        return { bytes, mimeType: file.mimeType, usage };
+      } finally {
+        await rm(folder, { recursive: true, force: true }).catch(() => undefined);
+      }
+    });
+  }
+
+  private codexHome(): string {
+    const env = this.options.sourceEnv;
+    const configured = env.CODEX_HOME?.trim();
+    if (configured) return configured;
+    return path.join(env.USERPROFILE?.trim() || env.HOME?.trim() || homedir(), ".codex");
+  }
+
   async runStructured(request: StructuredRequest): Promise<StructuredResult> {
     const version = await this.ensureReady(request.signal);
     const command = this.command();
@@ -133,6 +197,40 @@ export class CodexCli extends SubscriptionCli {
   }
 }
 
+export type ImageRequest = Readonly<{ prompt: string; signal: AbortSignal }>;
+
+export type GeneratedImage = Readonly<{
+  bytes: Uint8Array;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  usage: JsonObject;
+}>;
+
+const IMAGE_EXTENSIONS: Readonly<Record<string, GeneratedImage["mimeType"]>> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+};
+
+async function newestImage(
+  folder: string,
+): Promise<Readonly<{ path: string; mimeType: GeneratedImage["mimeType"] }> | null> {
+  const names = await readdir(folder).catch(() => [] as string[]);
+  let newest: { path: string; mimeType: GeneratedImage["mimeType"]; modified: number } | null =
+    null;
+  for (const name of names) {
+    const mimeType = IMAGE_EXTENSIONS[path.extname(name).toLowerCase()];
+    if (!mimeType) continue;
+    const file = path.join(folder, name);
+    const info = await stat(file);
+    if (!info.isFile()) continue;
+    if (!newest || info.mtimeMs > newest.modified) {
+      newest = { path: file, mimeType, modified: info.mtimeMs };
+    }
+  }
+  return newest ? { path: newest.path, mimeType: newest.mimeType } : null;
+}
+
 export function interpretCodexAuth(
   run: CliRunResult,
 ): Readonly<{ account: CliAccount; problem: string | null }> {
@@ -166,6 +264,7 @@ type FailureFactory = (
 
 type CodexEvent = {
   type?: unknown;
+  thread_id?: unknown;
   message?: unknown;
   error?: { message?: unknown };
   usage?: Record<string, unknown>;
@@ -180,6 +279,48 @@ export function interpretCodexRun(
   fail: FailureFactory,
 ): StructuredResult {
   const events = parseEvents(run.stdout);
+  assertCodexSucceeded(run, events, fail);
+
+  const agentMessage = events
+    .filter((event) => event.type === "item.completed" && event.item?.type === "agent_message")
+    .map((event) => (typeof event.item?.text === "string" ? event.item.text : ""))
+    .at(-1);
+  const text = lastMessage?.trim() ? lastMessage : (agentMessage ?? "");
+  let value: unknown;
+  try {
+    value = parseJsonObject(text);
+  } catch {
+    throw fail("Codex finished without a JSON result", "invalid_output", text || run.stderr);
+  }
+  return { value, usage: codexUsage(events, version) };
+}
+
+const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Reads an image run's event stream: the same failure handling as a structured run, then the
+ * thread id that names Codex's generated-images folder. The id is checked as a UUID before it is
+ * ever joined into a path. Exported for fixture tests.
+ */
+export function interpretCodexImageRun(
+  run: CliRunResult,
+  version: string,
+  fail: FailureFactory,
+): Readonly<{ threadId: string; usage: JsonObject }> {
+  const events = parseEvents(run.stdout);
+  assertCodexSucceeded(run, events, fail);
+  const threadId = events.find((event) => event.type === "thread.started")?.thread_id;
+  if (typeof threadId !== "string" || !THREAD_ID.test(threadId)) {
+    throw fail("Codex did not report a thread id for the image run", "invalid_output", run.stderr);
+  }
+  return { threadId, usage: { ...codexUsage(events, version), images: 1 } };
+}
+
+function assertCodexSucceeded(
+  run: CliRunResult,
+  events: readonly CodexEvent[],
+  fail: FailureFactory,
+): void {
   const failed = events.findLast((event) => event.type === "turn.failed");
   const lastError = events.findLast(
     (event) =>
@@ -208,19 +349,6 @@ export function interpretCodexRun(
       detail,
     );
   }
-
-  const agentMessage = events
-    .filter((event) => event.type === "item.completed" && event.item?.type === "agent_message")
-    .map((event) => (typeof event.item?.text === "string" ? event.item.text : ""))
-    .at(-1);
-  const text = lastMessage?.trim() ? lastMessage : (agentMessage ?? "");
-  let value: unknown;
-  try {
-    value = parseJsonObject(text);
-  } catch {
-    throw fail("Codex finished without a JSON result", "invalid_output", text || run.stderr);
-  }
-  return { value, usage: codexUsage(events, version) };
 }
 
 function parseEvents(stdout: string): CodexEvent[] {

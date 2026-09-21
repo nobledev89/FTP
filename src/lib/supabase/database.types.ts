@@ -1778,6 +1778,7 @@ export type Database = {
         | "manual_gemini"
         | "gemini_api"
         | "internal"
+        | "codex_image"
       publish_log_kind:
         | "publish"
         | "revalidate"
@@ -2010,6 +2011,7 @@ export const Constants = {
         "manual_gemini",
         "gemini_api",
         "internal",
+        "codex_image",
       ],
       publish_log_kind: [
         "publish",
