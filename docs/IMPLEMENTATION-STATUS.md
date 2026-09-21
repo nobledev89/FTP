@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Topic discovery, ChatGPT images, and discard are built and verified locally; their migrations await the owner's production `db push`. |
-| Last updated           | 2026-09-21 16:00, Asia/Singapore                                     |
+| Current task           | Topic discovery is live on production; the worker runs continuously on the owner's PC. |
+| Last updated           | 2026-09-21 16:50, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
 | Active blockers        | Production database writes must be run by the owner (auto mode refuses them). |
-| Next action            | Owner runs `supabase db push --include-seed` (five migrations plus seeds); then push `main`, set discovery targets, and run the worker continuously. |
+| Next action            | Owner applies `20260921160000_seed_topic_discovery_prompt.sql`, sets category targets, and reviews the first discovered articles. |
 
 ## Status legend
 
@@ -61,8 +61,10 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Apply the withdrawal migration to production.
 - [x] Add owner-requested topic discovery (ten categories with daily targets, 30-minute news scans,
       review before scheduling), ChatGPT images through Codex, and discarding.
-- [ ] Apply the discovery migrations to production, run one production article to `VERIFIED`, and
-      run the worker continuously.
+- [x] Apply the discovery migrations to production and run the worker continuously (Task
+      Scheduler daemon).
+- [ ] Apply the discovery prompt migration, set category targets, and take the first discovered
+      article through review to `VERIFIED` on production.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -331,6 +333,41 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Discovery live; worker runs continuously
+
+Date/time: 2026-09-21 16:50, Asia/Singapore
+
+Phase/task: Phase 12 — production release of discovery, images, and discard
+
+Status change: Phase 12 remains `IN_PROGRESS`.
+
+What changed: The owner ran `supabase db push --include-seed`. All five migrations applied, but
+the CLI only records a changed seed file's new hash without re-running it, so the new
+`topic-discovery` prompt did not reach production (the categories did, from their migration).
+`20260921160000_seed_topic_discovery_prompt.sql` inserts that prompt for existing sites and is a
+no-op where the seed already ran. Pushed `main` (`cc20439`). Added
+`scripts/windows/install-worker-task.ps1` and `run-worker.ps1`, registered the **FinTechPulse
+Worker** scheduled task (at sign-in, hidden, single instance, no time limit, not elevated, crash
+restart after a minute, log in `%LOCALAPPDATA%\FinTechPulse\logs\worker.log`), and started it.
+
+Files/migrations affected: `supabase/migrations/20260921160000_seed_topic_discovery_prompt.sql`,
+`scripts/windows/*`, `docs/HERMES.md`, this file.
+
+Verification performed: `supabase migration list --linked` shows the five new versions applied;
+production has 10 categories and 118 transitions, and no `topic-discovery` prompt before the new
+migration. A local reset yields exactly one active discovery prompt. GitHub Actions run
+`35569513098` on `cc20439` passed all three jobs. The live site returns 200 for `/` and `/blog`
+and redirects signed-out `/admin/settings` to login. The scheduled task is `Running`; its log shows
+both subscription CLIs ready, `worker.started` with all seven stages, and idle polls against the
+production queue.
+
+Result: Passed. Discovery stays off until the owner sets targets and switches it on.
+
+Commit/PR: `cc20439` and the commit that adds this entry.
+
+Next action: Owner applies the prompt migration, enables discovery with category targets, and
+reviews the first discovered article.
 
 ### 2026-09-21 — Topic discovery, ChatGPT images through Codex, and discard
 

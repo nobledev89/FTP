@@ -40,6 +40,24 @@ This is read-only. Exit `0` means the configured worker heartbeat is online. Exi
 worker has never heartbeated or is stale/offline; the emitted JSON includes queue and heartbeat
 details. Exit `1` means the status query itself failed, and `2` means local configuration is invalid.
 
+## Installed setup on the owner's PC
+
+The production worker runs as the long-lived daemon under Task Scheduler, installed with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\FinTechPulse\scripts\windows\install-worker-task.ps1
+Start-ScheduledTask -TaskName 'FinTechPulse Worker'
+```
+
+The **FinTechPulse Worker** task starts hidden at sign-in under the owner's own account (not
+elevated, so the Codex and Claude Code sign-ins apply), never runs a second copy, and has no
+run-time limit. `scripts/windows/run-worker.ps1` runs `pnpm worker:start` and restarts it a minute
+after any non-zero exit; a clean stop ends the task. Output is appended to
+`%LOCALAPPDATA%\FinTechPulse\logs\worker.log`, rotated to `worker.log.1` at start-up once it passes
+20 MB. Stop it with `Stop-ScheduledTask -TaskName 'FinTechPulse Worker'`; remove it with
+`Unregister-ScheduledTask -TaskName 'FinTechPulse Worker'`. The PC must stay awake for the worker to
+publish on schedule and to run topic discovery.
+
 ## Windows Task Scheduler alternative
 
 If Hermes is unavailable, create a task with these conservative settings:
