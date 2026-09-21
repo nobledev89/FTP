@@ -8,12 +8,12 @@ This is the authoritative live record of implementation progress. Update it imme
 | ---------------------- | ----------------------------------------------------------------- |
 | Overall implementation | `IN_PROGRESS`                                                     |
 | Current phase          | Phase 12 — Operations, documentation, and release QA (`IN_PROGRESS`) |
-| Current task           | Hosted preview handoff: owner design sign-off and preview deployment. |
-| Last updated           | 2026-09-21 11:00, Asia/Singapore                                     |
+| Current task           | Provision hosted Supabase and connect the existing Vercel deployment to it. |
+| Last updated           | 2026-09-21 12:00, Asia/Singapore                                     |
 | Branch                 | `main`, tracking `origin/main` (`git@github.com:nobledev89/FTP.git`) |
 | Relevant commit        | Phase 12 release candidate `6ff36bc` is pushed; GitHub Actions run `35548731358` on `5ac8322` (same code tree) passes. |
-| Active blockers        | Owner design sign-off (Phase 1) remains pending. Preview/production deployment and Cloudflare changes require the owner's hosted accounts. |
-| Next action            | Obtain owner design sign-off, then deploy and smoke-test a preview with the owner's hosted accounts. |
+| Active blockers        | Hosted Supabase needs an owner-created project and `supabase login`. The production Vercel deployment at `fintechpulse.co.uk` has no Supabase variables yet. |
+| Next action            | Link the hosted Supabase project, push migrations, then set the Vercel variables and run the production smoke checks. |
 
 ## Status legend
 
@@ -28,7 +28,7 @@ This is the authoritative live record of implementation progress. Update it imme
 | Phase | Scope                                              | Status        | Progress | Completed | Evidence summary |
 | ----: | -------------------------------------------------- | ------------- | -------: | --------- | ---------------- |
 |     0 | Repository and architecture baseline               | `COMPLETE`    |     100% | 2026-09-17 | Local gate passed: frozen install, format, lint, typecheck, 4 unit tests, build. GitHub CI not yet run (not pushed). Commit `a86d8d4`. |
-|     1 | Paperframe design lock                             | `IN_PROGRESS` |      90% | —         | Implemented; 29 unit tests and 40 Playwright checks pass at 375/768/1024/1440px; agent visual review done; production build 404s fixture routes. Owner design sign-off pending. |
+|     1 | Paperframe design lock                             | `COMPLETE`    |     100% | 2026-09-21 | Implemented; unit and Playwright checks pass at 375/768/1024/1440px; production build 404s fixture routes. Owner signed off on 2026-09-21; approved screenshots stored in `docs/design-review/approved-2026-09-21/`. |
 |     2 | Supabase schema and security                       | `COMPLETE`    |     100% | 2026-09-17 | Fresh `supabase db reset` applies 7 migrations and seed; `db:lint` clean; 90 integration tests pass twice in a row (schema/grants, RLS matrix, queue concurrency and leases, state machine and publication boundary, Storage). Local only; GitHub CI job added but not run. |
 |     3 | Domain services and state machine                  | `COMPLETE`    |     100% | 2026-09-17 | 163 unit tests and 93 integration tests pass; transition map is in exact database parity; format, lint, typecheck, and production build pass. |
 |     4 | Authentication and admin shell                     | `COMPLETE`    |     100% | 2026-09-18 | 240 unit tests, 112 integration tests, 57 signed-out Playwright checks, and 10 authenticated Playwright checks pass; format, lint, typecheck, and production build pass. |
@@ -54,8 +54,9 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Run the complete clean database, security, accessibility, responsive, failure-recovery, and
       browser release-QA matrix and record screenshots/evidence.
 - [x] Confirm the private GitHub Actions run for Phase 11 and the Phase 12 release candidate.
-- [ ] Obtain owner design sign-off, deploy a preview, then production, and configure the exact
-      Vercel-provided DNS values in Cloudflare.
+- [x] Obtain owner design sign-off, deploy production to Vercel, and configure the Vercel-provided
+      DNS values in Cloudflare (apex canonical, `www` redirects, valid TLS).
+- [ ] Provision hosted Supabase, set the Vercel variables, and pass the production smoke checks.
 
 ### Phase 11 — Publishing, scheduling, and verification hardening
 
@@ -146,7 +147,7 @@ This is the authoritative live record of implementation progress. Update it imme
 - [x] Enforce public/admin import separation with lint rules.
 - [x] Add Paperframe MIT attribution to adapted files.
 - [x] Run the gate and record design-review evidence at 375/768/1024/1440px.
-- [ ] Owner design review of `/design-review`, `/design-review/archive`, `/design-review/article`, and `/admin/design-review` (run `pnpm test:e2e` for screenshots in `test-results/design-review/`). After sign-off, store approved baselines and mark Phase 1 `COMPLETE`.
+- [x] Owner design review of `/design-review`, `/design-review/archive`, `/design-review/article`, and `/admin/design-review` (run `pnpm test:e2e` for screenshots in `test-results/design-review/`). Signed off 2026-09-21; approved screenshots stored in `docs/design-review/approved-2026-09-21/`.
 
 ### Phase 2 — Supabase schema and security (complete; kept for review)
 
@@ -324,6 +325,36 @@ This is the authoritative live record of implementation progress. Update it imme
   boundary and uses the existing bounded retry path if the rendered page is stale or unavailable.
 
 ## Completion log
+
+### 2026-09-21 — Phase 1 owner design sign-off; production domain already live
+
+Date/time: 2026-09-21 12:00, Asia/Singapore
+
+Phase/task: Phase 1 — owner design review; Phase 12 — hosted state check
+
+Status change: Phase 1 `IN_PROGRESS` (90%) -> `COMPLETE`. Phase 12 remains `IN_PROGRESS`.
+
+What changed: The owner reviewed `/design-review`, `/design-review/archive`,
+`/design-review/article`, and `/admin/design-review` on a local dev server and approved them. The
+41 release-QA screenshots (375/768/1024/1440px) are stored as the approved record in
+`docs/design-review/approved-2026-09-21/`.
+
+Files/migrations affected: `docs/IMPLEMENTATION-STATUS.md`, `docs/design-review/approved-2026-09-21/`.
+
+Verification performed: A hosted check found the owner had already deployed `main` to Vercel and
+configured Cloudflare DNS. `fintechpulse.co.uk` resolves to Vercel (`216.198.79.1`, `64.29.17.1`)
+and serves a Let's Encrypt certificate valid 2026-09-18 to 2026-12-17; `http://` and
+`www.fintechpulse.co.uk` redirect with 308 to the apex. `/`, `/blog`, `/feed.xml`, `/sitemap.xml`,
+and `/robots.txt` return 200; an unknown slug and `/design-review` return 404. The deployment has no
+Supabase variables: `/admin/login` shows the configuration notice, `/blog` shows the empty state,
+and `/admin` renders a server redirect to the login page rather than any console data.
+
+Result: Passed for Phase 1. Phase 12 production still needs hosted Supabase and Vercel variables.
+
+Commit/PR: Recorded in the commit that adds this entry.
+
+Next action: Provision hosted Supabase, set the four Vercel variables, redeploy, and run the
+production smoke checks.
 
 ### 2026-09-21 — Phase 12 release candidate passes GitHub Actions
 
