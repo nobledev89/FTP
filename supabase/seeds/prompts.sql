@@ -643,7 +643,8 @@ research and write each story you choose.
 
 ## Categories that need a story
 
-Find exactly one story for each category below, unless you cannot find a suitable one.
+Find up to three candidate stories for each category below, unless you cannot find a suitable one.
+The system will keep the highest-potential story per category and limit the total automatically.
 
 {{categories}}
 
@@ -670,6 +671,12 @@ different outlet.
    UK, and why it matters. Avoid rumours, price speculation, and promotional launches with no news
    value.
 6. Each story may be used for one category only.
+7. Optimise for potential qualified views without using clickbait. Score each candidate on broad UK
+   reader impact, current search intent, recognisable companies or institutions, timeliness, and
+   whether the article answers a practical question. A major consumer or regulatory change should
+   normally outrank a narrow vendor announcement.
+8. Do not claim access to search-volume or traffic analytics you did not actually observe. The
+   score is an editorial estimate, and its rationale must identify the signals behind it.
 
 ## What to return for each story
 
@@ -681,6 +688,14 @@ different outlet.
 - `angle`: two or three sentences telling the writer what the article should cover and the UK angle
   to take.
 - `keywords`: three to six search keywords a UK reader would use.
+- `trafficPotential`: an editorial estimate containing:
+  - `score`: a whole number from 0 to 100. Reserve 80+ for unusually broad, timely stories with
+    clear UK impact; 60â€“79 for solid sector interest; below 60 for narrower stories.
+  - `audience`: `broad`, `medium`, or `niche`.
+  - `searchIntent`: `high`, `medium`, or `low`.
+  - `urgency`: `breaking`, `timely`, or `evergreen`.
+  - `rationale`: one or two factual sentences explaining the likely demand signals, without
+    inventing analytics.
 - `source`: the story you found — its `headline`, `url` (https), `publisher`, and `publishedAt`
   (`YYYY-MM-DD`).
 
@@ -696,6 +711,13 @@ or after, no Markdown fence:
       "articleType": "news | analysis | explainer | guide",
       "angle": "string",
       "keywords": ["string"],
+      "trafficPotential": {
+        "score": 0,
+        "audience": "broad | medium | niche",
+        "searchIntent": "high | medium | low",
+        "urgency": "breaking | timely | evergreen",
+        "rationale": "string"
+      },
       "source": {
         "headline": "string",
         "url": "https://…",

@@ -926,7 +926,7 @@ describe("subscription CLI providers", () => {
     expect(await claudeCli.promptRuns()).toHaveLength(0);
   });
 
-  it("holds a Codex usage limit for an editor instead of retrying or switching provider", async () => {
+  it("cools down Codex and resumes automatically without switching provider", async () => {
     const jobId = await createJob(editor, {
       topic: "Usage-limited research CLI",
       researchMode: "codex_cli",
@@ -941,16 +941,16 @@ describe("subscription CLI providers", () => {
     );
     const { runner } = pipeline(5, cli);
 
-    await expect(runner.runOnce()).resolves.toMatchObject({ state: "needs_human" });
+    await expect(runner.runOnce()).resolves.toMatchObject({ state: "usage_deferred" });
     const job = await jobRow(jobId);
     expect(job).toMatchObject({
-      status: "NEEDS_HUMAN",
-      needs_human_stage: "research",
-      action_required_kind: "usage_limit",
+      status: "RESEARCH_PENDING",
+      needs_human_stage: null,
+      action_required_kind: null,
       research_mode: "codex_cli",
-      next_attempt_at: null,
+      attempt_count: 0,
     });
-    expect(job.action_required_message).toMatch(/no API was used/);
+    expect(job.next_attempt_at).not.toBeNull();
     expect(await codexCli.promptRuns()).toHaveLength(1);
     await expect(runner.runOnce()).resolves.toMatchObject({ state: "idle" });
   });

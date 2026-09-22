@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 /**
- * What the topic-discovery prompt returns (`discovery-1`). The database re-validates everything it
+ * What the topic-discovery prompt returns (`discovery-2`). The database re-validates everything it
  * stores; this schema rejects malformed output before any job is proposed.
  */
 
-export const DISCOVERY_SCHEMA_VERSION = "discovery-1";
+export const DISCOVERY_SCHEMA_VERSION = "discovery-2";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
 
@@ -16,6 +16,15 @@ export const discoverySuggestionSchema = z
     articleType: z.enum(["news", "analysis", "explainer", "guide"]),
     angle: z.string().trim().min(20).max(1500),
     keywords: z.array(z.string().trim().min(2).max(60)).min(1).max(8),
+    trafficPotential: z
+      .object({
+        score: z.number().int().min(0).max(100),
+        audience: z.enum(["broad", "medium", "niche"]),
+        searchIntent: z.enum(["high", "medium", "low"]),
+        urgency: z.enum(["breaking", "timely", "evergreen"]),
+        rationale: z.string().trim().min(20).max(500),
+      })
+      .strict(),
     source: z
       .object({
         headline: z.string().trim().min(3).max(300),
@@ -32,7 +41,7 @@ export const discoverySuggestionSchema = z
   .strict();
 
 export const discoveryOutputSchema = z
-  .object({ suggestions: z.array(discoverySuggestionSchema).max(24) })
+  .object({ suggestions: z.array(discoverySuggestionSchema).max(30) })
   .strict();
 
 export type DiscoverySuggestion = z.infer<typeof discoverySuggestionSchema>;

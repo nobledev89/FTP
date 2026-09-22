@@ -37,6 +37,7 @@ const due: DiscoveryDue = {
     },
   ],
   recentTopics: [{ category: "payments", topic: "Old story", url: "https://example.com/old" }],
+  availableJobSlots: 2,
 };
 
 function suggestion(overrides: Partial<DiscoverySuggestion> = {}): DiscoverySuggestion {
@@ -46,6 +47,13 @@ function suggestion(overrides: Partial<DiscoverySuggestion> = {}): DiscoverySugg
     articleType: "news",
     angle: "Explain what the new instant payment rules mean for UK consumers and firms.",
     keywords: ["instant payments", "uk"],
+    trafficPotential: {
+      score: 75,
+      audience: "broad",
+      searchIntent: "high",
+      urgency: "timely",
+      rationale: "The rules affect a broad UK payments audience and answer a timely question.",
+    },
     source: {
       headline: "Regulator publishes instant payment rules",
       url: "https://example.com/news/instant",
@@ -59,12 +67,16 @@ function suggestion(overrides: Partial<DiscoverySuggestion> = {}): DiscoverySugg
 const quietLogger = new StructuredLogger({}, { write: () => undefined });
 
 describe("selectSuggestions", () => {
-  it("keeps the first fresh, unused story for each due category", () => {
+  it("keeps the highest-scoring fresh story for each category", () => {
     const chosen = selectSuggestions(
       {
         suggestions: [
-          suggestion(),
-          suggestion({ topic: "A second payments story for the same category" }),
+          suggestion({ trafficPotential: { ...suggestion().trafficPotential, score: 60 } }),
+          suggestion({
+            topic: "A higher-potential payments story for the same category",
+            source: { ...suggestion().source, url: "https://example.com/news/higher" },
+            trafficPotential: { ...suggestion().trafficPotential, score: 90 },
+          }),
           suggestion({
             categorySlug: "explainers",
             articleType: "explainer",
@@ -81,7 +93,7 @@ describe("selectSuggestions", () => {
     expect(
       chosen.map(({ category, suggestion: picked }) => [category.slug, picked.source.url]),
     ).toEqual([
-      ["payments", "https://example.com/news/instant"],
+      ["payments", "https://example.com/news/higher"],
       ["explainers", "https://example.com/explainer"],
     ]);
   });
@@ -112,7 +124,8 @@ describe("discoveryPrompt", () => {
     expect(prompt).toContain("Today 2026-09-21");
     expect(prompt).toContain("`payments` — **Payments**");
     expect(prompt).toContain("[payments] Old story — https://example.com/old");
-    expect(prompt).toContain("discovery-1");
+    expect(prompt).toContain("discovery-2");
+    expect(prompt).toContain("trafficPotential");
   });
 
   it("refuses to scan without the reviewed template", () => {
@@ -124,6 +137,7 @@ describe("TopicDiscoveryService", () => {
   function harness(options: { value?: unknown; due?: DiscoveryDue | null; fail?: Error } = {}) {
     const created: DiscoveredJobInput[] = [];
     const finished: DiscoveryFinish[] = [];
+    const deferred: string[] = [];
     const prompts: string[] = [];
     const store: DiscoveryStore = {
       begin: async () => (options.due === undefined ? due : options.due),
@@ -131,6 +145,9 @@ describe("TopicDiscoveryService", () => {
       createJob: async (input) => {
         created.push(input);
         return `job-${created.length}`;
+      },
+      deferUsageLimit: async (_siteId, _workerId, summary) => {
+        deferred.push(summary);
       },
       finish: async (_runId, _workerId, result) => {
         finished.push(result);
@@ -144,7 +161,7 @@ describe("TopicDiscoveryService", () => {
       },
     };
     const service = new TopicDiscoveryService(store, cli, "home-pc-1", quietLogger);
-    return { service, created, finished, prompts };
+    return { service, created, deferred, finished, prompts };
   }
 
   it("does nothing when no scan is due", async () => {
@@ -170,13 +187,16 @@ describe("TopicDiscoveryService", () => {
   });
 
   it("records a failed scan without throwing into the queue", async () => {
-    const { service, finished } = harness({ fail: new Error("You've hit your usage limit.") });
+    const { service, deferred, finished } = harness({
+      fail: new Error("You've hit your usage limit."),
+    });
     const outcome = await service.runIfDue(new AbortController().signal);
     expect(outcome).toMatchObject({ state: "failed", runId: 7 });
     expect(finished[0]).toMatchObject({
       succeeded: false,
       error: expect.stringContaining("usage limit"),
     });
+    expect(deferred[0]).toContain("usage limit");
   });
 
   it("rejects malformed Codex output and creates nothing", async () => {

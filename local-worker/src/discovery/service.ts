@@ -4,6 +4,7 @@ import type { Database, Json } from "../db/database.types.js";
 import { unwrapResult, WorkerDatabaseError } from "../db/worker-store.js";
 import type { StructuredLogger } from "../logging/logger.js";
 import { safeSummary } from "../logging/redact.js";
+import { classifyError } from "../queue/retry.js";
 import { renderTemplate, type JsonObject } from "../providers/contract.js";
 import type { StructuredCli } from "../providers/cli/base.js";
 import { providerJsonSchema } from "../providers/cli/structured-output.js";
@@ -19,10 +20,10 @@ import {
  *
  * The database decides whether a scan is due and which categories still owe an article today
  * (`worker_begin_topic_discovery`), and it enforces every quota again when a job is created. This
- * service only asks Codex, with live web search, for one story per due category, filters out
- * anything stale, duplicated, or for a category that was not asked for, and hands the survivors
+ * service asks Codex, with live web search, for ranked candidates, filters out anything stale,
+ * duplicated, or for a category that was not asked for, and hands the highest-traffic survivors
  * to `worker_create_discovered_job`. A failed scan is recorded on its run row and never throws
- * into the job queue; the next interval simply tries again.
+ * into the job queue; usage limits activate the shared Codex cooldown automatically.
  */
 
 export type DueCategory = Readonly<{
@@ -44,6 +45,7 @@ export type DiscoveryDue = Readonly<{
   today: string;
   categories: readonly DueCategory[];
   recentTopics: readonly RecentTopic[];
+  availableJobSlots: number;
 }>;
 
 export type DiscoveryTemplates = Readonly<{ discovery: string | null; styleGuide: string | null }>;
@@ -67,6 +69,7 @@ export interface DiscoveryStore {
   templates(siteId: string): Promise<DiscoveryTemplates>;
   /** The new job id, or null when the quota was met meanwhile or the story was used before. */
   createJob(input: DiscoveredJobInput): Promise<string | null>;
+  deferUsageLimit(siteId: string, workerId: string, summary: string): Promise<void>;
   finish(runId: number, workerId: string, result: DiscoveryFinish): Promise<void>;
 }
 
@@ -86,8 +89,8 @@ function daysBetween(fromIsoDate: string, toIsoDate: string): number {
 }
 
 /**
- * At most one suggestion per due category, in the order Codex ranked them. Stale, future-dated,
- * already-covered, and unrequested stories are dropped. Exported for tests.
+ * At most one suggestion per due category, then the strongest candidates across all categories.
+ * Stale, future-dated, already-covered, and unrequested stories are dropped. Exported for tests.
  */
 export function selectSuggestions(
   output: DiscoveryOutput,
@@ -98,7 +101,13 @@ export function selectSuggestions(
   const chosen = new Map<string, DiscoverySuggestion>();
   const usedUrls = new Set<string>();
 
-  for (const suggestion of output.suggestions) {
+  const ranked = [...output.suggestions].sort((left, right) => {
+    const score = right.trafficPotential.score - left.trafficPotential.score;
+    if (score !== 0) return score;
+    return right.source.publishedAt.localeCompare(left.source.publishedAt);
+  });
+
+  for (const suggestion of ranked) {
     const category = categories.get(suggestion.categorySlug);
     if (!category || chosen.has(category.slug)) continue;
     const url = suggestion.source.url;
@@ -115,10 +124,13 @@ export function selectSuggestions(
     usedUrls.add(url);
   }
 
-  return due.categories.flatMap((category) => {
-    const suggestion = chosen.get(category.slug);
-    return suggestion ? [{ category, suggestion }] : [];
-  });
+  return [...chosen.entries()]
+    .map(([slug, suggestion]) => ({ category: categories.get(slug)!, suggestion }))
+    .sort(
+      (left, right) =>
+        right.suggestion.trafficPotential.score - left.suggestion.trafficPotential.score,
+    )
+    .slice(0, due.availableJobSlots);
 }
 
 /** Renders the reviewed template with the scan's context. Exported for tests. */
@@ -142,7 +154,7 @@ export function discoveryPrompt(due: DiscoveryDue, templates: DiscoveryTemplates
             (topic) => `- [${topic.category}] ${topic.topic}${topic.url ? ` — ${topic.url}` : ""}`,
           )
           .join("\n");
-  return renderTemplate(templates.discovery, {
+  const base = renderTemplate(templates.discovery, {
     styleGuide: templates.styleGuide ?? "",
     siteName: due.siteName,
     today: due.today,
@@ -151,6 +163,7 @@ export function discoveryPrompt(due: DiscoveryDue, templates: DiscoveryTemplates
     recentTopics: recent,
     schemaVersion: DISCOVERY_SCHEMA_VERSION,
   });
+  return `${base}\n\n## Current traffic-ranking requirements (these override older discovery instructions)\n\nFind up to three credible candidates per requested category, then rank all candidates by realistic\nview potential for a UK fintech readership. Favour broad reader impact, strong current search intent,\nrecognisable entities, timeliness, and a useful UK consequence. Do not invent analytics or use\nclickbait. Return no more than ${due.availableJobSlots} final candidates in total. Each suggestion\nmust include \`trafficPotential\` with an integer \`score\` from 0 to 100, \`audience\`\n(\`broad|medium|niche\`), \`searchIntent\` (\`high|medium|low\`), \`urgency\`\n(\`breaking|timely|evergreen\`), and a short evidence-based \`rationale\`. The JSON must match\nschema \`${DISCOVERY_SCHEMA_VERSION}\`.`;
 }
 
 export class TopicDiscoveryService {
@@ -215,6 +228,13 @@ export class TopicDiscoveryService {
       return { state: "completed", runId: due.runId, candidates, created };
     } catch (error) {
       const summary = safeSummary(error);
+      if (classifyError(error) === "usage_limit") {
+        try {
+          await this.store.deferUsageLimit(due.siteId, this.workerId, summary);
+        } catch (cooldownError) {
+          log.warn("discovery.cooldown_failed", { error: cooldownError });
+        }
+      }
       try {
         await this.store.finish(due.runId, this.workerId, {
           succeeded: false,
@@ -276,6 +296,7 @@ export class SupabaseDiscoveryStore implements DiscoveryStore {
       today: row.today,
       categories: (Array.isArray(row.categories) ? row.categories : []).map(dueCategoryRow),
       recentTopics: (Array.isArray(row.recent_topics) ? row.recent_topics : []).map(recentTopicRow),
+      availableJobSlots: row.available_job_slots,
     };
   }
 
@@ -310,6 +331,11 @@ export class SupabaseDiscoveryStore implements DiscoveryStore {
         headline: suggestion.source.headline,
         publisher: suggestion.source.publisher,
         published_at: suggestion.source.publishedAt,
+        traffic_score: suggestion.trafficPotential.score,
+        traffic_audience: suggestion.trafficPotential.audience,
+        traffic_search_intent: suggestion.trafficPotential.searchIntent,
+        traffic_urgency: suggestion.trafficPotential.urgency,
+        traffic_rationale: suggestion.trafficPotential.rationale,
       },
     });
     if (error) {
@@ -320,6 +346,20 @@ export class SupabaseDiscoveryStore implements DiscoveryStore {
       });
     }
     return data ?? null;
+  }
+
+  async deferUsageLimit(siteId: string, workerId: string, summary: string): Promise<void> {
+    const { error } = await this.client.rpc("defer_provider_for_usage_limit", {
+      p_site_id: siteId,
+      p_worker_id: workerId,
+      p_provider_key: "codex_subscription",
+      p_summary: summary,
+    });
+    if (error) {
+      throw new WorkerDatabaseError("defer_provider_for_usage_limit", error.code, error.message, {
+        cause: error,
+      });
+    }
   }
 
   async finish(runId: number, workerId: string, result: DiscoveryFinish): Promise<void> {

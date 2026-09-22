@@ -93,9 +93,13 @@ export async function resetWorkflowData(): Promise<void> {
   await db().query(`
     truncate table
       public.job_events, public.publishing_logs, public.originality_checks, public.article_slug_aliases,
-      public.claim_sources, public.claims, public.sources, public.images, public.worker_instances
+      public.claim_sources, public.claims, public.sources, public.images, public.worker_instances,
+      public.processing_admissions, public.provider_cooldowns
     cascade;
     truncate table public.article_jobs, public.articles, public.drafts, public.audits, public.research_packets,
       public.provider_runs cascade;
+    update public.site_settings set processing_window_minutes = 300, processing_max_articles = 4,
+      discovery_backlog_limit = 8;
+    update public.sites set timezone = 'Europe/London';
   `);
 }

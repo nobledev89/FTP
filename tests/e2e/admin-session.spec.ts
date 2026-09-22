@@ -49,6 +49,7 @@ let ownerId: string;
 const createdUserIds: string[] = [];
 let jobId: string | null = null;
 let originalByline: string | null = null;
+let originalProcessingMax = 4;
 let publishedSlug: string | null = null;
 let publishedJobId: string | null = null;
 
@@ -81,10 +82,16 @@ test.beforeAll(async () => {
 
   const settings = await service
     .from("site_settings")
-    .select("default_byline_name")
+    .select("default_byline_name, processing_max_articles")
     .eq("site_id", site.data.id)
     .single();
   originalByline = settings.data?.default_byline_name ?? null;
+  originalProcessingMax = settings.data?.processing_max_articles ?? 4;
+  const testCapacity = await service
+    .from("site_settings")
+    .update({ processing_max_articles: 24 })
+    .eq("site_id", site.data.id);
+  if (testCapacity.error) throw testCapacity.error;
 });
 
 test.afterAll(async () => {
@@ -92,7 +99,10 @@ test.afterAll(async () => {
   if (originalByline !== null) {
     await service
       .from("site_settings")
-      .update({ default_byline_name: originalByline })
+      .update({
+        default_byline_name: originalByline,
+        processing_max_articles: originalProcessingMax,
+      })
       .neq("site_id", "00000000-0000-0000-0000-000000000000");
   }
   // The job is left behind on purpose: `job_events` is append-only for every role, so the job it
@@ -752,7 +762,7 @@ test.describe("authenticated admin console", () => {
     await page.getByRole("button", { name: "Save discovery settings" }).click();
     await expect(
       page.getByText(
-        "Discovery is on: up to 3 articles a day, published as soon as each passes its check.",
+        /Discovery is on: up to 3 articles a day, with no more than 24 entering processing every 5 hours, published 15 minutes apart/,
       ),
     ).toBeVisible();
 
@@ -765,7 +775,11 @@ test.describe("authenticated admin console", () => {
     // Back to waiting for an editor, which is the default.
     await page.getByLabel("Publish discovered articles automatically").uncheck();
     await page.getByRole("button", { name: "Save discovery settings" }).click();
-    await expect(page.getByText("Discovery is on: up to 3 articles a day.")).toBeVisible();
+    await expect(
+      page.getByText(
+        /Discovery is on: up to 3 articles a day, with no more than 24 entering processing every 5 hours/,
+      ),
+    ).toBeVisible();
 
     const saved = await service
       .from("topic_categories")

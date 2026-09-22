@@ -94,17 +94,13 @@ function assertImageBriefsCover(draft: DraftOutput, imageCount: number): void {
 }
 
 /**
- * Whether the queue will retry this failure by itself. Auth and usage-limit failures go to an
- * editor (`failureOutcome`), so a subscription CLI that is signed out or out of usage is recorded
- * as not retryable rather than as a pending retry that never comes.
+ * Whether the queue will retry this failure by itself. Usage limits are deferred until the shared
+ * provider cooldown expires; authentication still needs an editor.
  */
 function isRetryable(error: unknown): boolean {
   const errorClass = (error as { errorClass?: string } | null)?.errorClass;
   return (
-    errorClass !== "permanent_config" &&
-    errorClass !== "invalid_output" &&
-    errorClass !== "auth" &&
-    errorClass !== "usage_limit"
+    errorClass !== "permanent_config" && errorClass !== "invalid_output" && errorClass !== "auth"
   );
 }
 

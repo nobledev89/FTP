@@ -39,7 +39,13 @@ export type StageHandler = (context: StageContext) => Promise<void>;
 export type StageHandlers = Partial<Readonly<Record<PipelineStage, StageHandler>>>;
 
 export type RunOnceState =
-  "idle" | "completed" | "retry_scheduled" | "needs_human" | "failed" | "abandoned";
+  | "idle"
+  | "completed"
+  | "retry_scheduled"
+  | "usage_deferred"
+  | "needs_human"
+  | "failed"
+  | "abandoned";
 
 export type RunOnceResult = {
   state: RunOnceState;
@@ -265,20 +271,30 @@ export class WorkerRunner {
       const summary = safeSummary(effectiveError);
 
       try {
-        await this.store.failStage({
-          jobId: claim.jobId,
-          workerId: this.env.WORKER_ID,
-          leaseToken: claim.leaseToken,
-          outcome,
-          errorClass,
-          summary,
-          ...(context.providerRunId ? { runId: context.providerRunId } : {}),
-          ...(outcome === "retry"
-            ? {
-                retryAt: retryAt(claim.stage, claim.attempt, errorClass, this.now(), this.random),
-              }
-            : {}),
-        });
+        if (errorClass === "usage_limit") {
+          await this.store.deferUsageLimit({
+            jobId: claim.jobId,
+            workerId: this.env.WORKER_ID,
+            leaseToken: claim.leaseToken,
+            summary,
+            ...(context.providerRunId ? { runId: context.providerRunId } : {}),
+          });
+        } else {
+          await this.store.failStage({
+            jobId: claim.jobId,
+            workerId: this.env.WORKER_ID,
+            leaseToken: claim.leaseToken,
+            outcome,
+            errorClass,
+            summary,
+            ...(context.providerRunId ? { runId: context.providerRunId } : {}),
+            ...(outcome === "retry"
+              ? {
+                  retryAt: retryAt(claim.stage, claim.attempt, errorClass, this.now(), this.random),
+                }
+              : {}),
+          });
+        }
       } catch (failureError) {
         if (errorCode(failureError) === "FT003") {
           log.warn("stage.lease_lost", { error: failureError });
@@ -287,7 +303,12 @@ export class WorkerRunner {
         throw failureError;
       }
 
-      const state = outcome === "retry" ? "retry_scheduled" : outcome;
+      const state =
+        errorClass === "usage_limit"
+          ? "usage_deferred"
+          : outcome === "retry"
+            ? "retry_scheduled"
+            : outcome;
       log.warn("stage.failed", { error_class: errorClass, outcome, summary });
       return { state, claim };
     } finally {

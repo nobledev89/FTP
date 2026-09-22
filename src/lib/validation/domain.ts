@@ -62,6 +62,11 @@ export const discoverySourceSchema = z
     publisher: z.string().nullable().optional(),
     published_at: z.string().nullable().optional(),
     run_id: z.number().int().optional(),
+    traffic_score: z.number().int().min(0).max(100).optional(),
+    traffic_audience: z.enum(["broad", "medium", "niche"]).optional(),
+    traffic_search_intent: z.enum(["high", "medium", "low"]).optional(),
+    traffic_urgency: z.enum(["breaking", "timely", "evergreen"]).optional(),
+    traffic_rationale: z.string().optional(),
   })
   .passthrough();
 

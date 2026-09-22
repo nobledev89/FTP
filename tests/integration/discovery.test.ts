@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { adminUser, closeDb, db, resetWorkflowData, serviceClient } from "./helpers/clients";
+import {
+  adminUser,
+  closeDb,
+  db,
+  resetWorkflowData,
+  serviceClient,
+  siteId,
+} from "./helpers/clients";
 import type { TestUser } from "./helpers/clients";
 import { events, expectCode, jobRow, succeed, unwrap } from "./helpers/workflow";
 
@@ -23,6 +30,7 @@ beforeEach(async () => {
   await db().query(
     `update public.site_settings set discovery_enabled = false, discovery_interval_minutes = 30,
        discovery_image_count = 1, discovery_auto_publish = false,
+       processing_window_minutes = 300, processing_max_articles = 4, discovery_backlog_limit = 8,
        discovery_last_started_at = null`,
   );
 });
@@ -77,6 +85,11 @@ function propose(runId: number, categoryId: string, url: string, topic = "UK reg
       headline: "Regulator announces a change",
       publisher: "Example News",
       published_at: "2026-09-21",
+      traffic_score: 75,
+      traffic_audience: "broad",
+      traffic_search_intent: "high",
+      traffic_urgency: "timely",
+      traffic_rationale: "This affects a broad UK audience and answers a timely reader question.",
     },
   });
 }
@@ -95,6 +108,7 @@ describe("topic discovery", () => {
     expect(run).not.toBeNull();
     expect(run!.site_name).toBe("FinTechPulse");
     expect(run!.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(run!.available_job_slots).toBe(8);
     const due = (run!.categories as Array<{ slug: string }>).map((entry) => entry.slug);
     expect(due).toEqual(["payments", "open-banking"]);
 
@@ -139,6 +153,7 @@ describe("topic discovery", () => {
       url: "https://example.com/news/one",
       publisher: "Example News",
       run_id: run.run_id,
+      traffic_score: 75,
     });
     expect((await events(jobId)).map((event) => event.event_type)).toEqual([
       "job.created",
@@ -208,6 +223,36 @@ describe("topic discovery", () => {
       "select count(*)::int as count from public.article_jobs where origin = 'discovery'",
     );
     expect(rows[0].count).toBe(1);
+  });
+
+  it("stops discovering when the unfinished backlog reaches its limit", async () => {
+    await enable({ payments: 12 });
+    await db().query("update public.site_settings set discovery_backlog_limit = 1");
+    const run = (await begin())!;
+    const payments = await category("payments");
+    await unwrap(propose(run.run_id, payments.id, "https://example.com/news/backlog"));
+    await succeed(
+      serviceClient().rpc("worker_finish_topic_discovery", {
+        p_run_id: run.run_id,
+        p_worker_id: WORKER,
+        p_succeeded: true,
+      }),
+    );
+    await succeed(editor.client.rpc("admin_request_discovery_scan"));
+    expect(await begin()).toBeNull();
+  });
+
+  it("pauses discovery while the Codex subscription is cooling down", async () => {
+    await enable({ payments: 1 });
+    await succeed(
+      serviceClient().rpc("defer_provider_for_usage_limit", {
+        p_site_id: await siteId(),
+        p_worker_id: WORKER,
+        p_provider_key: "codex_subscription",
+        p_summary: "Usage limit reached",
+      }),
+    );
+    expect(await begin()).toBeNull();
   });
 
   it("refuses proposals outside a running scan, from another worker, or without a real source", async () => {

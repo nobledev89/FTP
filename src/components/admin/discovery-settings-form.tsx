@@ -33,6 +33,12 @@ type DiscoverySettingsFormProps = {
   imageCount: number;
   autoPublish: boolean;
   spacingMinutes: number;
+  processingWindowMinutes: number;
+  processingMaxArticles: number;
+  backlogLimit: number;
+  processingUsed: number;
+  nextSlotAt: string | null;
+  cooldowns: readonly Readonly<{ provider: string; blockedUntil: string }>[];
   categories: readonly Category[];
   canEdit: boolean;
 };
@@ -43,6 +49,12 @@ export function DiscoverySettingsForm({
   imageCount,
   autoPublish,
   spacingMinutes,
+  processingWindowMinutes,
+  processingMaxArticles,
+  backlogLimit,
+  processingUsed,
+  nextSlotAt,
+  cooldowns,
   categories,
   canEdit,
 }: DiscoverySettingsFormProps) {
@@ -53,6 +65,26 @@ export function DiscoverySettingsForm({
     <div className="grid gap-5">
       <form action={formAction} className="grid gap-5">
         <FormMessage state={state} />
+        <div className="rounded-control border border-border bg-surface-subtle p-3 text-sm">
+          <p>
+            <span className="font-semibold">Processing allowance:</span> {processingUsed} of{" "}
+            {processingMaxArticles} articles admitted in the last {processingWindowMinutes / 60}{" "}
+            hours.
+            {nextSlotAt ? ` Next place opens ${new Date(nextSlotAt).toLocaleString()}.` : ""}
+          </p>
+          {cooldowns.length > 0 ? (
+            <ul className="mt-2 grid gap-1 text-xs text-text-muted">
+              {cooldowns.map((cooldown) => (
+                <li key={cooldown.provider}>
+                  {cooldown.provider.replaceAll("_", " ")} paused until{" "}
+                  {new Date(cooldown.blockedUntil).toLocaleString()}; it will resume automatically.
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-xs text-text-muted">No provider is currently cooling down.</p>
+          )}
+        </div>
         <fieldset className="grid gap-4" disabled={!canEdit}>
           <legend className="sr-only">Discovery</legend>
           <CheckboxField
@@ -116,6 +148,57 @@ export function DiscoverySettingsForm({
                 max={240}
                 min={5}
                 name="spacingMinutes"
+                required
+                type="number"
+              />
+            </Field>
+            <Field
+              hint="A rolling window matching your LLM subscription reset period."
+              htmlFor="processingWindowHours"
+              label="Usage window (hours)"
+            >
+              <input
+                aria-describedby="processingWindowHours-hint"
+                className={controlClass}
+                defaultValue={processingWindowMinutes / 60}
+                id="processingWindowHours"
+                max={24}
+                min={1}
+                name="processingWindowHours"
+                required
+                type="number"
+              />
+            </Field>
+            <Field
+              hint="New articles entering research in each rolling window. Admitted articles are still allowed to finish."
+              htmlFor="processingMaxArticles"
+              label="Articles per usage window"
+            >
+              <input
+                aria-describedby="processingMaxArticles-hint"
+                className={controlClass}
+                defaultValue={processingMaxArticles}
+                id="processingMaxArticles"
+                max={24}
+                min={1}
+                name="processingMaxArticles"
+                required
+                type="number"
+              />
+            </Field>
+            <Field
+              hint="Discovery pauses at this many unfinished articles, preventing an unattended queue from growing forever."
+              htmlFor="backlogLimit"
+              label="Maximum discovery backlog"
+            >
+              <input
+                aria-describedby="backlogLimit-hint"
+                className={controlClass}
+                defaultValue={backlogLimit}
+                id="backlogLimit"
+                max={50}
+                min={1}
+                name="backlogLimit"
                 required
                 type="number"
               />

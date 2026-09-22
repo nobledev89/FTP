@@ -655,6 +655,9 @@ const discoverySettingsSchema = z.object({
   imageCount: z.coerce.number().int().min(0).max(1),
   autoPublish: z.boolean(),
   spacingMinutes: z.coerce.number().int().min(5).max(240),
+  processingWindowHours: z.coerce.number().int().min(1).max(24),
+  processingMaxArticles: z.coerce.number().int().min(1).max(24),
+  backlogLimit: z.coerce.number().int().min(1).max(50),
   targets: z.array(
     z.object({ categoryId: uuidSchema, dailyTarget: z.coerce.number().int().min(0).max(12) }),
   ),
@@ -682,6 +685,9 @@ export async function updateDiscoverySettingsAction(
       imageCount: formData.get("imageCount"),
       autoPublish: formData.get("autoPublish") === "on",
       spacingMinutes: formData.get("spacingMinutes"),
+      processingWindowHours: formData.get("processingWindowHours"),
+      processingMaxArticles: formData.get("processingMaxArticles"),
+      backlogLimit: formData.get("backlogLimit"),
       targets,
     });
     if (!parsed.success) {
@@ -702,6 +708,9 @@ export async function updateDiscoverySettingsAction(
       p_image_count: parsed.data.imageCount,
       p_auto_publish: parsed.data.autoPublish,
       p_spacing_minutes: parsed.data.spacingMinutes,
+      p_processing_window_minutes: parsed.data.processingWindowHours * 60,
+      p_processing_max_articles: parsed.data.processingMaxArticles,
+      p_backlog_limit: parsed.data.backlogLimit,
     });
     if (error) throw error;
     for (const target of parsed.data.targets) {
@@ -717,7 +726,7 @@ export async function updateDiscoverySettingsAction(
     return {
       ok: true,
       message: parsed.data.enabled
-        ? `Discovery is on: up to ${total} article${total === 1 ? "" : "s"} a day${
+        ? `Discovery is on: up to ${total} article${total === 1 ? "" : "s"} a day, with no more than ${parsed.data.processingMaxArticles} entering processing every ${parsed.data.processingWindowHours} hours${
             parsed.data.autoPublish
               ? `, published ${parsed.data.spacingMinutes} minutes apart once each passes its check`
               : ""

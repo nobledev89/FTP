@@ -109,6 +109,15 @@ export default async function SettingsPage() {
               imageCount={discovery.settings.discovery_image_count}
               intervalMinutes={discovery.settings.discovery_interval_minutes}
               spacingMinutes={discovery.settings.auto_publish_spacing_minutes}
+              processingWindowMinutes={discovery.settings.processing_window_minutes}
+              processingMaxArticles={discovery.settings.processing_max_articles}
+              backlogLimit={discovery.settings.discovery_backlog_limit}
+              processingUsed={discovery.processing.used}
+              nextSlotAt={discovery.processing.nextSlotAt}
+              cooldowns={discovery.cooldowns.map((cooldown) => ({
+                provider: cooldown.provider_key,
+                blockedUntil: cooldown.blocked_until,
+              }))}
             />
           </Panel>
         ) : null}

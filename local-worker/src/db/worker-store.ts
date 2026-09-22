@@ -42,6 +42,14 @@ export type StageFailure = {
   runId?: string;
 };
 
+export type UsageLimitDeferral = Readonly<{
+  jobId: string;
+  workerId: string;
+  leaseToken: string;
+  summary: string;
+  runId?: string;
+}>;
+
 export interface WorkerStore {
   heartbeat(input: Heartbeat): Promise<string>;
   recoverExpiredLeases(): Promise<number>;
@@ -65,6 +73,7 @@ export interface WorkerStore {
     message: string,
   ): Promise<JobStatus>;
   failStage(failure: StageFailure): Promise<JobStatus>;
+  deferUsageLimit(deferral: UsageLimitDeferral): Promise<JobStatus>;
   status(workerId: string): Promise<Json>;
 }
 
@@ -217,6 +226,19 @@ export class SupabaseWorkerStore implements WorkerStore {
         ...(failure.runId ? { p_run_id: failure.runId } : {}),
       }),
       "fail_stage",
+    );
+  }
+
+  async deferUsageLimit(deferral: UsageLimitDeferral): Promise<JobStatus> {
+    return unwrap(
+      await this.client.rpc("defer_stage_for_usage_limit", {
+        p_job_id: deferral.jobId,
+        p_worker_id: deferral.workerId,
+        p_lease_token: deferral.leaseToken,
+        p_summary: deferral.summary,
+        ...(deferral.runId ? { p_run_id: deferral.runId } : {}),
+      }),
+      "defer_stage_for_usage_limit",
     );
   }
 

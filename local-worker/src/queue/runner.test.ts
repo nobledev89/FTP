@@ -7,6 +7,7 @@ import {
   type Heartbeat,
   type PipelineStage,
   type StageFailure,
+  type UsageLimitDeferral,
   type WorkerStore,
 } from "../db/worker-store.js";
 import { StructuredLogger } from "../logging/logger.js";
@@ -55,6 +56,7 @@ class FakeStore implements WorkerStore {
   manualActions = 0;
   heartbeats: Heartbeat[] = [];
   failures: StageFailure[] = [];
+  usageDeferrals: UsageLimitDeferral[] = [];
   available = true;
   loseLeaseOnRenew = false;
 
@@ -102,6 +104,11 @@ class FakeStore implements WorkerStore {
       : failure.outcome === "failed"
         ? "FAILED"
         : "RESEARCH_PENDING";
+  }
+
+  async deferUsageLimit(deferral: UsageLimitDeferral): Promise<ClaimedJob["status"]> {
+    this.usageDeferrals.push(deferral);
+    return "RESEARCH_PENDING";
   }
 
   async status(): Promise<Json> {
@@ -246,6 +253,24 @@ describe("WorkerRunner", () => {
 
     await expect(runner.runOnce()).resolves.toMatchObject({ state: "completed" });
     expect(store.completions).toBe(1);
+    expect(store.failures).toHaveLength(0);
+  });
+
+  it("defers a usage-limited provider without consuming a normal retry", async () => {
+    const store = new FakeStore();
+    const runner = new WorkerRunner({
+      env,
+      store,
+      logger: quietLogger(),
+      handlers: {
+        research: async () => {
+          throw new Error("You've hit your usage limit");
+        },
+      },
+    });
+
+    await expect(runner.runOnce()).resolves.toMatchObject({ state: "usage_deferred" });
+    expect(store.usageDeferrals).toHaveLength(1);
     expect(store.failures).toHaveLength(0);
   });
 });

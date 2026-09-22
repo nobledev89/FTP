@@ -72,6 +72,7 @@ describe("claim_next_job", () => {
   });
 
   it("distributes concurrent claims across distinct jobs exactly once", async () => {
+    await db().query("update public.site_settings set processing_max_articles = 5");
     const jobIds = await Promise.all(Array.from({ length: 5 }, () => startedJob()));
     const results = await Promise.all(
       Array.from({ length: 12 }, (_, index) => claim(index % 2 === 0 ? WORKER_A : WORKER_B)),

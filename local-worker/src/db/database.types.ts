@@ -1012,6 +1012,39 @@ export type Database = {
           },
         ]
       }
+      processing_admissions: {
+        Row: {
+          admitted_at: string
+          job_id: string
+          site_id: string
+        }
+        Insert: {
+          admitted_at?: string
+          job_id: string
+          site_id: string
+        }
+        Update: {
+          admitted_at?: string
+          job_id?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_admissions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "article_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processing_admissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prompt_templates: {
         Row: {
           content: string
@@ -1055,6 +1088,51 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_cooldowns: {
+        Row: {
+          blocked_until: string
+          created_at: string
+          provider_key: string
+          reason: string
+          site_id: string
+          source_job_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocked_until: string
+          created_at?: string
+          provider_key: string
+          reason: string
+          site_id: string
+          source_job_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocked_until?: string
+          created_at?: string
+          provider_key?: string
+          reason?: string
+          site_id?: string
+          source_job_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_cooldowns_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_cooldowns_source_job_id_fkey"
+            columns: ["source_job_id"]
+            isOneToOne: false
+            referencedRelation: "article_jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -1355,12 +1433,15 @@ export type Database = {
           default_byline_name: string
           default_byline_role: string | null
           discovery_auto_publish: boolean
+          discovery_backlog_limit: number
           discovery_enabled: boolean
           discovery_image_count: number
           discovery_interval_minutes: number
           discovery_last_started_at: string | null
           editorial_contact_email: string | null
           extra: Json
+          processing_max_articles: number
+          processing_window_minutes: number
           seo_default_description: string | null
           seo_default_title: string | null
           share_image_path: string | null
@@ -1378,12 +1459,15 @@ export type Database = {
           default_byline_name?: string
           default_byline_role?: string | null
           discovery_auto_publish?: boolean
+          discovery_backlog_limit?: number
           discovery_enabled?: boolean
           discovery_image_count?: number
           discovery_interval_minutes?: number
           discovery_last_started_at?: string | null
           editorial_contact_email?: string | null
           extra?: Json
+          processing_max_articles?: number
+          processing_window_minutes?: number
           seo_default_description?: string | null
           seo_default_title?: string | null
           share_image_path?: string | null
@@ -1401,12 +1485,15 @@ export type Database = {
           default_byline_name?: string
           default_byline_role?: string | null
           discovery_auto_publish?: boolean
+          discovery_backlog_limit?: number
           discovery_enabled?: boolean
           discovery_image_count?: number
           discovery_interval_minutes?: number
           discovery_last_started_at?: string | null
           editorial_contact_email?: string | null
           extra?: Json
+          processing_max_articles?: number
+          processing_window_minutes?: number
           seo_default_description?: string | null
           seo_default_title?: string | null
           share_image_path?: string | null
@@ -1824,9 +1911,12 @@ export type Database = {
       admin_update_discovery_settings: {
         Args: {
           p_auto_publish?: boolean
+          p_backlog_limit?: number
           p_enabled: boolean
           p_image_count: number
           p_interval_minutes: number
+          p_processing_max_articles?: number
+          p_processing_window_minutes?: number
           p_spacing_minutes?: number
         }
         Returns: undefined
@@ -1928,6 +2018,27 @@ export type Database = {
         }
         Returns: string
       }
+      defer_provider_for_usage_limit: {
+        Args: {
+          p_provider_key: string
+          p_retry_at?: string
+          p_site_id: string
+          p_summary: string
+          p_worker_id: string
+        }
+        Returns: string
+      }
+      defer_stage_for_usage_limit: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_retry_at?: string
+          p_run_id?: string
+          p_summary: string
+          p_worker_id: string
+        }
+        Returns: Database["public"]["Enums"]["job_status"]
+      }
       fail_stage: {
         Args: {
           p_error_class: Database["public"]["Enums"]["error_class"]
@@ -2025,6 +2136,7 @@ export type Database = {
       worker_begin_topic_discovery: {
         Args: { p_worker_id: string }
         Returns: {
+          available_job_slots: number
           categories: Json
           recent_topics: Json
           run_id: number

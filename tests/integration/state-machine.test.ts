@@ -161,6 +161,57 @@ describe("state machine guard", () => {
   });
 });
 
+describe("autonomous throughput", () => {
+  it("admits only the configured number of new articles in a rolling window", async () => {
+    await db().query("update public.site_settings set processing_max_articles = 2");
+    const jobIds = await Promise.all([createJob(editor), createJob(editor), createJob(editor)]);
+    for (const jobId of jobIds) await unwrap(adminAction(editor, jobId, "start"));
+
+    expect(await claim("window-worker-a", ["research"])).not.toBeNull();
+    expect(await claim("window-worker-b", ["research"])).not.toBeNull();
+    expect(await claim("window-worker-c", ["research"])).toBeNull();
+
+    const { rows } = await db().query<{ count: number }>(
+      "select count(*)::int as count from public.processing_admissions",
+    );
+    expect(rows[0]!.count).toBe(2);
+  });
+
+  it("defers a usage-limited provider and resumes it without consuming an attempt", async () => {
+    const jobId = await createJob(editor, { researchMode: "codex_cli" });
+    await unwrap(adminAction(editor, jobId, "start"));
+    const claimed = (await claimFor(jobId))!;
+
+    await unwrap(
+      serviceClient().rpc("defer_stage_for_usage_limit", {
+        p_job_id: jobId,
+        p_worker_id: WORKER_A,
+        p_lease_token: claimed.lease_token,
+        p_summary: "Codex usage limit reached",
+      }),
+    );
+    expect(await jobRow(jobId)).toMatchObject({ status: "RESEARCH_PENDING", attempt_count: 0 });
+    expect(await claim("cooldown-worker", ["research"])).toBeNull();
+
+    await db().query(
+      "update public.provider_cooldowns set blocked_until = now() - interval '1 minute'",
+    );
+    const connection = await db().connect();
+    try {
+      await connection.query("begin");
+      await connection.query("select private.set_state_context('transition')");
+      await connection.query(
+        "update public.article_jobs set next_attempt_at = now() - interval '1 minute' where id = $1",
+        [jobId],
+      );
+      await connection.query("commit");
+    } finally {
+      connection.release();
+    }
+    expect(await claim("cooldown-worker", ["research"])).not.toBeNull();
+  });
+});
+
 describe("audit and revision loop", () => {
   it("allows two automatic revision cycles, then requires a human", async () => {
     const jobId = await createJob(editor);

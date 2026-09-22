@@ -247,6 +247,8 @@ describe("automatic publication policy", () => {
   });
 
   it("does not write the same story twice", async () => {
+    // Keep the pacing allowance above one whatever UTC hour CI happens to run this test.
+    await db().query("update public.sites set timezone = 'Pacific/Kiritimati'");
     await setDailyTarget("payments", 4);
     await succeed(
       editor.client.rpc("admin_update_discovery_settings", {
@@ -270,7 +272,18 @@ describe("automatic publication policy", () => {
         p_article_type: "news",
         p_keywords: ["payments"],
         p_requirements: "Explain what changes for UK consumers.",
-        p_source: { url, headline, publisher: "Example News", published_at: "2026-09-21" },
+        p_source: {
+          url,
+          headline,
+          publisher: "Example News",
+          published_at: "2026-09-21",
+          traffic_score: 75,
+          traffic_audience: "broad",
+          traffic_search_intent: "high",
+          traffic_urgency: "timely",
+          traffic_rationale:
+            "This affects a broad UK audience and answers a timely reader question.",
+        },
       });
 
     const created = await unwrap(

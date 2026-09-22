@@ -29,6 +29,9 @@ const settingsSchema = z
     discovery_image_count: z.number().int(),
     discovery_auto_publish: z.boolean(),
     auto_publish_spacing_minutes: z.number().int(),
+    processing_window_minutes: z.number().int(),
+    processing_max_articles: z.number().int(),
+    discovery_backlog_limit: z.number().int(),
     discovery_last_started_at: nullableTimestampSchema,
   })
   .strict();
@@ -77,6 +80,16 @@ const reviewDraftSchema = z
   .object({ id: uuidSchema, title: z.string(), excerpt: z.string() })
   .strict();
 
+const admissionSchema = z.object({ admitted_at: timestampSchema }).strict();
+
+const cooldownSchema = z
+  .object({
+    provider_key: z.string(),
+    blocked_until: timestampSchema,
+    reason: z.string(),
+  })
+  .strict();
+
 export type DiscoverySettings = z.infer<typeof settingsSchema>;
 export type TopicCategory = z.infer<typeof categorySchema> & Readonly<{ createdToday: number }>;
 export type DiscoveryRun = z.infer<typeof runSchema>;
@@ -87,6 +100,8 @@ export type DiscoveryOverview = Readonly<{
   settings: DiscoverySettings;
   categories: readonly TopicCategory[];
   runs: readonly DiscoveryRun[];
+  processing: Readonly<{ used: number; nextSlotAt: string | null }>;
+  cooldowns: readonly z.infer<typeof cooldownSchema>[];
 }>;
 
 /** Midnight today in the publication timezone, as a UTC ISO timestamp. */
@@ -102,14 +117,21 @@ export async function getDiscoveryOverview(
   now = new Date(),
 ): Promise<DiscoveryOverview | null> {
   const client = await createSupabaseServerClient();
-  const [settings, categories, runs, today] = await Promise.all([
-    client
-      .from("site_settings")
-      .select(
-        "discovery_enabled, discovery_interval_minutes, discovery_image_count, discovery_auto_publish, auto_publish_spacing_minutes, discovery_last_started_at",
-      )
-      .eq("site_id", siteId)
-      .maybeSingle(),
+  const settingsResult = await client
+    .from("site_settings")
+    .select(
+      "discovery_enabled, discovery_interval_minutes, discovery_image_count, discovery_auto_publish, auto_publish_spacing_minutes, processing_window_minutes, processing_max_articles, discovery_backlog_limit, discovery_last_started_at",
+    )
+    .eq("site_id", siteId)
+    .maybeSingle();
+  if (settingsResult.error) throw toWorkflowError(settingsResult.error);
+  if (!settingsResult.data) return null;
+  const settings = settingsSchema.parse(settingsResult.data);
+  const windowStart = new Date(
+    now.getTime() - settings.processing_window_minutes * 60_000,
+  ).toISOString();
+
+  const [categories, runs, today, admissions, cooldowns] = await Promise.all([
     client
       .from("topic_categories")
       .select("id, slug, name, guidance, daily_target, sort_order")
@@ -129,12 +151,23 @@ export async function getDiscoveryOverview(
       .eq("site_id", siteId)
       .eq("origin", "discovery")
       .gte("created_at", startOfPublicationDay(now)),
+    client
+      .from("processing_admissions")
+      .select("admitted_at")
+      .eq("site_id", siteId)
+      .gt("admitted_at", windowStart)
+      .order("admitted_at"),
+    client
+      .from("provider_cooldowns")
+      .select("provider_key, blocked_until, reason")
+      .eq("site_id", siteId)
+      .gt("blocked_until", now.toISOString())
+      .order("blocked_until"),
   ]);
 
-  for (const result of [settings, categories, runs, today]) {
+  for (const result of [categories, runs, today, admissions, cooldowns]) {
     if (result.error) throw toWorkflowError(result.error);
   }
-  if (!settings.data) return null;
 
   const createdToday = new Map<string, number>();
   for (const row of today.data ?? []) {
@@ -143,13 +176,26 @@ export async function getDiscoveryOverview(
     }
   }
 
+  const activeAdmissions = z.array(admissionSchema).parse(admissions.data);
+  const oldestAdmission = activeAdmissions[0]?.admitted_at;
+
   return {
-    settings: settingsSchema.parse(settings.data),
+    settings,
     categories: z
       .array(categorySchema)
       .parse(categories.data)
       .map((category) => ({ ...category, createdToday: createdToday.get(category.id) ?? 0 })),
     runs: z.array(runSchema).parse(runs.data),
+    processing: {
+      used: activeAdmissions.length,
+      nextSlotAt:
+        activeAdmissions.length >= settings.processing_max_articles && oldestAdmission
+          ? new Date(
+              Date.parse(oldestAdmission) + settings.processing_window_minutes * 60_000,
+            ).toISOString()
+          : null,
+    },
+    cooldowns: z.array(cooldownSchema).parse(cooldowns.data),
   };
 }
 
