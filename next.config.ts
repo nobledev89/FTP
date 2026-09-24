@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { LEGACY_REDIRECTS } from "./src/lib/site/legacy-redirects";
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const localSupabase = /^http:\/\/(?:127\.0\.0\.1|localhost):54321(?:\/|$)/.test(supabaseUrl);
 
@@ -47,6 +49,7 @@ const nextConfig: NextConfig = {
         destination: "https://fintechpulse.co.uk/:path*",
         permanent: true,
       },
+      ...LEGACY_REDIRECTS.map((redirect) => ({ ...redirect, permanent: true })),
     ];
   },
 };

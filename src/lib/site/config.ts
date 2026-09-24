@@ -23,14 +23,65 @@ export const siteConfig = {
   language: "en",
   timeZone: "Europe/London",
   currency: "GBP",
-  navigation: [{ label: "Latest", href: "/blog" }] satisfies readonly NavItem[],
+  navigation: [
+    { label: "Latest", href: "/blog" },
+    { label: "Payments", href: "/topics/payments" },
+    { label: "Open Banking", href: "/topics/open-banking" },
+    { label: "Regulation", href: "/topics/fintech-regulation" },
+    { label: "Fraud", href: "/topics/fraud-security" },
+  ] satisfies readonly NavItem[],
   footerLinks: [
     { label: "Latest", href: "/blog" },
+    { label: "Topics", href: "/topics" },
+    { label: "About", href: "/about" },
+    { label: "Editorial standards", href: "/editorial-standards" },
+    { label: "AI policy", href: "/ai-policy" },
+    { label: "Corrections", href: "/corrections" },
+    { label: "Contact", href: "/contact" },
     { label: "RSS", href: "/feed.xml" },
   ] satisfies readonly NavItem[],
   disclosure:
     "FinTechPulse publishes general editorial information, not personalised financial, investment, tax, or legal advice.",
 } as const;
+
+/**
+ * Publisher facts shown on trust pages and in Organization structured data.
+ *
+ * Only facts the owner has confirmed belong here: a `null` or empty value is omitted from every page
+ * and from JSON-LD rather than guessed. Fill these before relying on the About and Contact pages for
+ * Google News or reader trust (docs/SEO-GROWTH-PLAN.md section 5.1).
+ */
+export type PublisherFacts = {
+  /** Registered name of the legal publisher, if different from the brand. */
+  readonly legalName: string | null;
+  /** Where the publisher is established, for example "London, United Kingdom". */
+  readonly location: string | null;
+  /** Year the current publication launched, as it should appear publicly. */
+  readonly foundingYear: string | null;
+  /** Named, accountable editor, if the owner chooses to publish one. */
+  readonly editor: { readonly name: string; readonly role: string } | null;
+  /** Verified profiles the publication actually operates (LinkedIn, X, and so on). */
+  readonly sameAs: readonly string[];
+};
+
+export const publisherFacts: PublisherFacts = {
+  legalName: null,
+  location: null,
+  foundingYear: null,
+  editor: null,
+  sameAs: [],
+};
+
+/** The shared desk byline used on automated and desk-produced articles. */
+export const EDITORIAL_TEAM = {
+  name: "FinTechPulse Editorial",
+  slug: "fintechpulse-editorial",
+} as const;
+
+/** Stable JSON-LD identifiers, so every page describes the same publisher and website entities. */
+export const ORGANIZATION_ID = `${CANONICAL_ORIGIN}/#organization`;
+export const WEBSITE_ID = `${CANONICAL_ORIGIN}/#website`;
+export const LOGO_URL = `${CANONICAL_ORIGIN}/brand/logo.png`;
 
 /**
  * Resolves the public site origin. Falls back to the canonical production origin so metadata never

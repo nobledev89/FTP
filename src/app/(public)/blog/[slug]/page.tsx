@@ -8,21 +8,20 @@ import {
   SourceList,
 } from "@/components/public/article-parts";
 import { ArticleFigure } from "@/components/public/article-image";
+import { Breadcrumbs } from "@/components/public/breadcrumbs";
+import { JsonLd } from "@/components/public/json-ld";
 import { Container } from "@/components/public/layout";
 import { SafeMarkdown } from "@/components/public/markdown";
 import { getRelatedPublicArticles, resolvePublicArticle } from "@/lib/publication/repository";
-import { siteConfig } from "@/lib/site/config";
-import { CANONICAL_ORIGIN } from "@/lib/site/config";
+import { LOGO_URL, ORGANIZATION_ID, siteConfig, WEBSITE_ID } from "@/lib/site/config";
+import { authorEntity, authorHref } from "@/lib/site/structured-data";
+import { storedCategoryVariants, topicForCategory, topicHref } from "@/lib/site/topics";
 
 export const revalidate = 300;
 
 type ArticlePageProps = {
   params: Promise<{ slug: string }>;
 };
-
-function jsonLd(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, "\\u003c");
-}
 
 export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
   const resolution = await resolvePublicArticle((await params).slug);
@@ -61,7 +60,11 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   if (resolution.alias) permanentRedirect(`/blog/${resolution.article.slug}`);
 
   const { article } = resolution;
-  const related = await getRelatedPublicArticles(article);
+  const topic = topicForCategory(article.category);
+  const related = await getRelatedPublicArticles(
+    article,
+    storedCategoryVariants(topic ? topic.categories : [article.category]),
+  );
   const structuredData = {
     "@context": "https://schema.org",
     "@type": article.articleType === "news" ? "NewsArticle" : "Article",
@@ -70,22 +73,37 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     description: article.metaDescription,
     datePublished: article.publishedAt,
     dateModified: article.updatedAt ?? article.publishedAt,
-    author: { "@type": "Organization", name: article.byline.name },
-    publisher: { "@type": "Organization", name: siteConfig.name, url: CANONICAL_ORIGIN },
+    inLanguage: siteConfig.locale,
+    articleSection: topic?.name ?? article.category,
+    author: [authorEntity(article.byline.name)],
+    publisher: {
+      "@type": "NewsMediaOrganization",
+      "@id": ORGANIZATION_ID,
+      name: siteConfig.name,
+      logo: { "@type": "ImageObject", url: LOGO_URL, width: 512, height: 512 },
+    },
+    isPartOf: { "@id": WEBSITE_ID },
     ...(article.image ? { image: [article.image.src] } : {}),
   };
 
   return (
     <>
-      <script
-        dangerouslySetInnerHTML={{ __html: jsonLd(structuredData) }}
-        type="application/ld+json"
-      />
+      <JsonLd data={structuredData} />
       <Container className="py-14 sm:py-16 lg:py-20" width="article">
+        <Breadcrumbs
+          items={[
+            topic
+              ? { name: topic.name, href: topicHref(topic) }
+              : { name: "Latest", href: "/blog" },
+            { name: article.title, href: `/blog/${article.slug}` },
+          ]}
+        />
         <article data-article-body="">
           <ArticleHeader
             byline={article.byline}
+            bylineHref={authorHref(article.byline.name)}
             category={article.category}
+            categoryHref={topic ? topicHref(topic) : null}
             excerpt={article.excerpt}
             publishedAt={article.publishedAt}
             title={article.title}
@@ -103,7 +121,10 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           <DisclosureNote>{siteConfig.disclosure}</DisclosureNote>
           <SourceList sources={article.sources} />
         </article>
-        <RelatedArticles articles={related} />
+        <RelatedArticles
+          articles={related}
+          topic={topic ? { name: topic.name, href: topicHref(topic) } : null}
+        />
       </Container>
     </>
   );

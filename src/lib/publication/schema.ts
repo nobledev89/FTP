@@ -7,6 +7,7 @@ import type {
   SourceReference,
 } from "@/components/public/types";
 import { CANONICAL_ORIGIN } from "@/lib/site/config";
+import { normaliseCategory } from "@/lib/site/topics";
 
 const slugSchema = z
   .string()
@@ -90,6 +91,8 @@ export const publicArticleIndexRowSchema = publicArticleRowBaseSchema.pick({
   title: true,
   excerpt: true,
   category: true,
+  article_type: true,
+  byline_name: true,
   hero_image: true,
   status: true,
   published_at: true,
@@ -144,7 +147,8 @@ function toImageAsset(
 }
 
 function category(value: string | null): string {
-  return value ?? "Analysis";
+  const clean = value ? normaliseCategory(value) : "";
+  return clean || "Analysis";
 }
 
 export function toArticleSummary(row: PublicArticleIndexRow, supabaseUrl: string): ArticleSummary {

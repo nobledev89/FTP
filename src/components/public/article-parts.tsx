@@ -9,6 +9,10 @@ import type { ArticleSummary, Byline, SourceReference } from "@/components/publi
 
 type ArticleHeaderProps = {
   category: string;
+  /** Topic hub the category belongs to; the label becomes a link when present. */
+  categoryHref?: string | null;
+  /** Author profile for the byline. */
+  bylineHref?: string | null;
   title: string;
   excerpt: string;
   byline: Byline;
@@ -18,6 +22,8 @@ type ArticleHeaderProps = {
 
 export function ArticleHeader({
   category,
+  categoryHref,
+  bylineHref,
   title,
   excerpt,
   byline,
@@ -26,14 +32,36 @@ export function ArticleHeader({
 }: ArticleHeaderProps) {
   return (
     <header className="mb-10 border-b border-line-soft pb-8">
-      <Eyebrow>{category}</Eyebrow>
+      <Eyebrow>
+        {categoryHref ? (
+          <Link
+            className="border-b border-line pb-0.5 transition-colors hover:border-ink hover:text-ink"
+            href={categoryHref}
+          >
+            {category}
+          </Link>
+        ) : (
+          category
+        )}
+      </Eyebrow>
       <h1 className="mt-4 font-serif text-5xl font-semibold leading-tight tracking-tight text-ink sm:text-6xl">
         {title}
       </h1>
       <p className="mt-5 max-w-3xl text-lg leading-8 text-muted">{excerpt}</p>
       <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-8">
         <p className="text-sm text-ink">
-          By <span className="font-medium">{byline.name}</span>
+          By{" "}
+          {bylineHref ? (
+            <Link
+              className="border-b border-line font-medium transition-colors hover:border-ink"
+              href={bylineHref}
+              rel="author"
+            >
+              {byline.name}
+            </Link>
+          ) : (
+            <span className="font-medium">{byline.name}</span>
+          )}
           {byline.role ? <span className="text-muted">, {byline.role}</span> : null}
         </p>
         <dl className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-[11px] uppercase tracking-[0.18em] text-subtle">
@@ -162,10 +190,12 @@ export function ArticleCard({ article, headingLevel = "h3" }: ArticleCardProps) 
 
 type RelatedArticlesProps = {
   articles: readonly ArticleSummary[];
+  /** Parent hub, linked beneath the cards so every article leads back to its topic. */
+  topic?: { readonly name: string; readonly href: string } | null;
 };
 
-export function RelatedArticles({ articles }: RelatedArticlesProps) {
-  if (articles.length === 0) {
+export function RelatedArticles({ articles, topic }: RelatedArticlesProps) {
+  if (articles.length === 0 && !topic) {
     return null;
   }
 
@@ -175,13 +205,27 @@ export function RelatedArticles({ articles }: RelatedArticlesProps) {
         className="font-mono text-[11px] uppercase tracking-[0.24em] text-subtle"
         id="related-articles"
       >
-        Related
+        {topic ? `More on ${topic.name}` : "Related"}
       </h2>
-      <div className="mt-8 grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-        {articles.map((article) => (
-          <ArticleCard article={article} key={article.slug} />
-        ))}
-      </div>
+      {articles.length > 0 ? (
+        <div className="mt-8 grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+          {articles.map((article) => (
+            <ArticleCard article={article} key={article.slug} />
+          ))}
+        </div>
+      ) : null}
+      {topic ? (
+        <p className="mt-10">
+          <Link
+            className="group inline-flex min-h-10 items-center font-mono text-[11px] uppercase tracking-[0.24em] text-muted"
+            href={topic.href}
+          >
+            <span className="border-b border-line pb-1 transition-colors group-hover:border-ink group-hover:text-ink">
+              All {topic.name} coverage
+            </span>
+          </Link>
+        </p>
+      ) : null}
     </section>
   );
 }

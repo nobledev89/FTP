@@ -6,6 +6,7 @@ import { Container } from "@/components/public/layout";
 import { PageHeader } from "@/components/public/page-header";
 import { Pagination } from "@/components/public/pagination";
 import { StreamList } from "@/components/public/stream-list";
+import { archivePageHref, parseArchivePage } from "@/lib/publication/page-number";
 import { getPublicArticlePage, PUBLIC_ARCHIVE_PAGE_SIZE } from "@/lib/publication/repository";
 import { CANONICAL_ORIGIN, siteConfig } from "@/lib/site/config";
 
@@ -15,19 +16,12 @@ type BlogPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function pageNumber(value: string | string[] | undefined): number | null {
-  if (value === undefined) return 1;
-  if (Array.isArray(value) || !/^[1-9]\d*$/.test(value)) return null;
-  const page = Number(value);
-  return Number.isSafeInteger(page) && page <= 100_000 ? page : null;
-}
-
 function archiveUrl(page: number): string {
-  return page === 1 ? "/blog" : `/blog?page=${page}`;
+  return archivePageHref("/blog", page);
 }
 
 export async function generateMetadata({ searchParams }: BlogPageProps): Promise<Metadata> {
-  const page = pageNumber((await searchParams).page) ?? 1;
+  const page = parseArchivePage((await searchParams).page) ?? 1;
   const title = page === 1 ? "Latest" : `Latest — page ${page}`;
   const canonical = `${CANONICAL_ORIGIN}${archiveUrl(page)}`;
   return {
@@ -49,11 +43,12 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
 }
 
 export default async function BlogPage({ searchParams }: BlogPageProps) {
-  const page = pageNumber((await searchParams).page);
+  const page = parseArchivePage((await searchParams).page);
   if (page === null) notFound();
 
   const result = await getPublicArticlePage(page, PUBLIC_ARCHIVE_PAGE_SIZE);
-  if (result.total > 0 && page > result.totalPages) notFound();
+  // Past the last page, or any page but the first of an empty archive, is a missing page.
+  if (page > Math.max(result.totalPages, 1)) notFound();
 
   return (
     <Container className="py-14 sm:py-16 lg:py-20">

@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/admin", "/api", "/design-review"],
     },
-    sitemap: `${CANONICAL_ORIGIN}/sitemap.xml`,
+    sitemap: [`${CANONICAL_ORIGIN}/sitemap.xml`, `${CANONICAL_ORIGIN}/news-sitemap.xml`],
     host: CANONICAL_ORIGIN,
   };
 }

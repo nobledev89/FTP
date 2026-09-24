@@ -5,15 +5,21 @@ The public application is a server-rendered Next.js publication backed only by t
 
 ## Routes
 
-| Route                                   | Behaviour                                                                                            |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `/`                                     | Publication masthead, newest article as the feature, and the next six articles                       |
-| `/blog`                                 | Newest-first archive with ten articles per page through `?page=N`                                    |
-| `/blog/[slug]`                          | Article body, byline and dates, published hero, disclosure, structured sources, and related articles |
-| `/feed.xml`                             | Latest 50 publication snapshots as RSS 2.0                                                           |
-| `/sitemap.xml`                          | Home, archive, and eligible article URLs, with image entries where available                         |
-| `/robots.txt`                           | Allows the publication and disallows admin, API, and review-fixture paths                            |
-| `/opengraph-image` and article variants | Generated 1200×630 publication/share images                                                          |
+| Route                                                          | Behaviour                                                                                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                                            | Publication masthead, newest article as the feature, the next six articles, and publisher/website JSON-LD                                   |
+| `/blog`                                                        | Newest-first archive with ten articles per page through `?page=N`; past the last page is a 404                                              |
+| `/blog/[slug]`                                                 | Article body, linked byline and topic, breadcrumbs, dates, hero, disclosure, sources, and related articles from the same hub                |
+| `/topics`, `/topics/[slug]`                                    | Topic index and five hubs (`src/lib/site/topics.ts`); a hub with fewer than three articles is `noindex`                                     |
+| `/authors/[slug]`                                              | Profile and articles for each published byline; the desk byline is described as a team, not a person                                        |
+| `/about`, `/editorial-standards`, `/ai-policy`, `/corrections` | Publisher trust pages (`src/lib/site/trust-pages.ts`); publisher facts come from `publisherFacts`                                           |
+| `/contact`                                                     | Contact form; a Server Action emails the editor through Resend. The destination is the server-only `CONTACT_TO_EMAIL` and is never rendered |
+| `/feed.xml`                                                    | Latest 50 publication snapshots as RSS 2.0; legacy `/feed/...` URLs redirect here                                                           |
+| `/sitemap.xml`                                                 | Rendered per request: home, archive, indexable hubs, author profiles, trust pages, and every article                                        |
+| `/news-sitemap.xml`                                            | Google News sitemap: news-format articles published in the last two days                                                                    |
+| `/robots.txt`                                                  | Allows the publication, disallows admin, API, and review-fixture paths, and lists both sitemaps                                             |
+| `/brand/logo.png`                                              | 512×512 publisher logo used in Organization and Article structured data                                                                     |
+| `/opengraph-image` and article variants                        | Generated 1200×630 publication/share images                                                                                                 |
 
 Unknown, malformed, future, withdrawn, or otherwise unpublished slugs return the public 404 without
 metadata from a draft. A public slug alias returns a permanent redirect to its current canonical
@@ -35,8 +41,8 @@ captions come from structured snapshot fields rather than article Markdown.
 
 ## Caching and invalidation
 
-Public queries use a five-minute Next data cache. Lists, sitemap, and RSS carry the
-`public:articles` tag; individual resolutions also carry `public:article:<slug>`. When publication
+Public queries use a five-minute Next data cache. Lists, hubs, author pages, both sitemaps, and RSS
+carry the `public:articles` tag; individual resolutions also carry `public:article:<slug>`. When publication
 commits, the worker calls `POST /api/revalidate` before live verification, retrying a transport
 failure, `429`, or `5xx` up to three times and recording the outcome in `publishing_logs`.
 
@@ -51,6 +57,12 @@ The route requires a secret of at least 32 characters, accepts only a five-minut
 uses constant-time signature comparison, rejects reused nonces in the process window, applies a
 bounded request rate, validates the slug, and expires only the global list tag and that slug's tag.
 It never accepts arbitrary cache tags or paths. Web and worker must receive the same secret.
+
+Both sitemaps are rendered per request (`dynamic = "force-dynamic"`) over that tagged index query.
+A metadata route is otherwise prerendered at build time, and a `revalidate` export alone left
+production serving the build's article list, so invalidating the tag is what makes a new article
+appear. `pnpm seo:check [origin] [--expect-slug <slug>]` verifies this live, along with archive
+404s, canonicals, orphans, and broken internal links.
 
 Withdrawal does not use this route. The console's Server Action calls `updateTag` for
 `public:articles` and the article's slug tag after `admin_withdraw_article` commits, so the next

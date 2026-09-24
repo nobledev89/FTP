@@ -22,6 +22,7 @@
     "format:check": "prettier --check .",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:e2e:admin": "node scripts/run-e2e-admin.mjs",
+    "seo:check": "node scripts/check-seo.mjs",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "worker:once": "pnpm --filter @fintechpulse/local-worker worker:once",
     "worker:start": "pnpm --filter @fintechpulse/local-worker worker:start",

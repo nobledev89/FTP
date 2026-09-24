@@ -1,4 +1,5 @@
 import { ArticleCard } from "@/components/public/article-parts";
+import { JsonLd } from "@/components/public/json-ld";
 import { EmptyState } from "@/components/public/empty-state";
 import { FrontPageLead } from "@/components/public/front-page-lead";
 import { LatestStream } from "@/components/public/latest-stream";
@@ -6,6 +7,7 @@ import { Container, Section } from "@/components/public/layout";
 import { Masthead } from "@/components/public/masthead";
 import { SectionHeading } from "@/components/public/section-heading";
 import { getPublicArticlePage } from "@/lib/publication/repository";
+import { siteGraph } from "@/lib/site/structured-data";
 
 export const revalidate = 300;
 
@@ -18,6 +20,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <JsonLd data={siteGraph()} />
       <Masthead date={new Date()} />
       {primary ? (
         <>
