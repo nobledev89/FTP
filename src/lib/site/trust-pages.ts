@@ -153,16 +153,16 @@ A separate AI audit checks the draft against its research and the style guide: f
 
 Not every article is read by a person before it is published. An article that automated discovery proposed may publish on its own only when all of these hold:
 
-- its audit has passed;
+- its automated audit and revision cycle has completed;
 - it has a hero image;
 - its headline does not repeat an article already published or scheduled;
 - the day's article limit set by the editor has not been reached.
 
-Automatically published articles are spaced through the day. Any article that fails a check waits for an editor, who decides whether it is published. Articles an editor commissions directly are published when the editor chooses.
+Automatically published articles are spaced through the day. A missing image, likely duplicate, or full daily schedule still holds an article back. Residual audit findings do not create an approval task after both automatic revisions have been used; they remain visible to the owner for the same-day review. Articles an editor commissions directly are published when the editor chooses.
 
 ## What a person decides
 
-The editor sets the topics, daily volume, style guide, and the instructions each stage follows; reviews every article held by the pipeline; and can correct, replace the image of, or withdraw any published article. Responsibility for everything ${name} publishes rests with the publisher, not with the software.
+The editor sets the topics, daily volume, style guide, and the instructions each stage follows; reviews published output and any article held by the pipeline; and can correct, replace the image of, or withdraw any published article. Responsibility for everything ${name} publishes rests with the publisher, not with the software.
 
 ## What automation is never used for
 
