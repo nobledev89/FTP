@@ -147,7 +147,7 @@ Hero images are editorial illustrations, not photographs. Most are created by an
 
 ## Audit
 
-A separate AI audit checks the draft against its research and the style guide: facts, sourcing, contradictions, stale figures, jurisdiction, risk context, copied wording, clarity, and usefulness. A draft with a serious finding is revised and audited again. When the automatic revision cycles are used up, or the audit finds a compliance question or conflicting sources, the article stops and waits for an editor.
+A separate AI audit checks the draft against its research and the style guide: facts, sourcing, contradictions, stale figures, jurisdiction, risk context, copied wording, clarity, and usefulness. A draft with a serious finding is revised and audited again. Articles opted into automatic publishing use both revision cycles before publication; any remaining findings stay attached to the internal record for the owner's same-day review and possible withdrawal. Editor-created articles continue to wait for explicit approval.
 
 ## Publication
 

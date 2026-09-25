@@ -3,16 +3,17 @@ import { describe, expect, it } from "vitest";
 import { WorkerStageError, classifyError, failureOutcome, retryAt, retryDelayMs } from "./retry.js";
 
 describe("worker retry policy", () => {
-  it("classifies actionable failures without retrying them", () => {
+  it("keeps authentication and usage limits out of retry loops", () => {
     expect(classifyError(new Error("Claude is not logged in"))).toBe("auth");
     expect(classifyError(new Error("Usage limit reached"))).toBe("usage_limit");
-    expect(classifyError(new Error("Schema validation failed"))).toBe("invalid_output");
     expect(failureOutcome("auth", 1, 5)).toBe("needs_human");
     expect(failureOutcome("usage_limit", 1, 5)).toBe("needs_human");
-    expect(failureOutcome("invalid_output", 1, 5)).toBe("needs_human");
   });
 
-  it("retries transient, rate-limited, and unknown failures until the configured ceiling", () => {
+  it("retries malformed provider output and operational failures until the configured ceiling", () => {
+    expect(classifyError(new Error("Schema validation failed"))).toBe("invalid_output");
+    expect(failureOutcome("invalid_output", 1, 5)).toBe("retry");
+    expect(failureOutcome("invalid_output", 5, 5)).toBe("failed");
     expect(failureOutcome("transient", 1, 5)).toBe("retry");
     expect(failureOutcome("rate_limit", 4, 5)).toBe("retry");
     expect(failureOutcome("unknown", 5, 5)).toBe("failed");

@@ -101,8 +101,9 @@ Transient failures and expired leases recover directly to the relevant pending s
 uses `RE_AUDIT_PENDING` once a revision has completed. Publishing recovery returns to `SCHEDULED` when
 a schedule exists and otherwise to `APPROVED`.
 
-Authentication and subscription usage-limit errors are never tight-loop retries. They require human
-action.
+Authentication errors require human action. Subscription usage limits enter a provider-wide cooldown
+and resume automatically. Malformed provider output is retried with backoff and eventually fails the
+job instead of creating an editor task.
 
 ### Human resolution
 
@@ -119,7 +120,11 @@ is mandatory. Resolution also requires a note and an explicit destination from:
 
 The database applies artifact gates as well as the transition map. An escalation at research, draft,
 or images cannot skip forward. Resolving to `APPROVED` requires the latest valid draft to be covered by
-the latest audit. A third automatic revision cycle is not allowed.
+the latest audit. A third automatic revision cycle is not allowed. For a discovered job explicitly
+opted into automatic publishing, a non-passing audit first uses both revision cycles. If findings
+remain, the latest draft is queued for publication with the audit attached and a system resolution
+event. This makes the published feed the owner's review queue; the owner can withdraw an article
+after the daily audit.
 
 ### Rescheduling and publishing now
 

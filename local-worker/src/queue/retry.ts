@@ -78,7 +78,7 @@ export function failureOutcome(
   attempt: number,
   maximumAttempts: number,
 ): FailureOutcome {
-  if (errorClass === "auth" || errorClass === "usage_limit" || errorClass === "invalid_output") {
+  if (errorClass === "auth" || errorClass === "usage_limit") {
     return "needs_human";
   }
   if (errorClass === "permanent_config" || attempt >= maximumAttempts) return "failed";

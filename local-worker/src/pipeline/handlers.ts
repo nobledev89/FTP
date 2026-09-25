@@ -99,9 +99,7 @@ function assertImageBriefsCover(draft: DraftOutput, imageCount: number): void {
  */
 function isRetryable(error: unknown): boolean {
   const errorClass = (error as { errorClass?: string } | null)?.errorClass;
-  return (
-    errorClass !== "permanent_config" && errorClass !== "invalid_output" && errorClass !== "auth"
-  );
+  return errorClass !== "permanent_config" && errorClass !== "auth";
 }
 
 export function createPipelineHandlers(dependencies: PipelineDependencies): StageHandlers {
